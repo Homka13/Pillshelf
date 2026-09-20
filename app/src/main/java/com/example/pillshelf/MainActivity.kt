@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
                         ReminderScheduler.scheduleNextFor(this@MainActivity, med)
                     }
                 }
+                // Віджет показує наступну дозу — оновлюємо після будь-якої зміни списку.
+                com.example.pillshelf.widget.DoseWidget.updateAll(this@MainActivity)
             }
         }
     }

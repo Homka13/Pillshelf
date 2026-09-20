@@ -457,6 +457,7 @@ class PillshelfViewModel(
                 .atZone(java.time.ZoneId.systemDefault())
                 .toInstant().toEpochMilli()
             ReminderScheduler.schedule(getApplication(), medication.id, triggerAt)
+            com.example.pillshelf.widget.DoseWidget.updateAll(getApplication())
         }
     }
 

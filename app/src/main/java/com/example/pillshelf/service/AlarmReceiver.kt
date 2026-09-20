@@ -5,18 +5,25 @@ import android.content.Context
 import android.content.Intent
 import com.example.pillshelf.data.local.PillshelfDatabase
 import com.example.pillshelf.data.model.IntakeHistory
-import com.example.pillshelf.domain.usecase.CalculateNextIntakeUseCase
+import com.example.pillshelf.data.model.Medication
+import com.example.pillshelf.data.repository.IntakeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
-import java.time.ZoneId
 
 /**
- * Приймач точних будильників доз.
+ * Приймач точних будильників і кнопок у сповіщенні.
  *
- * ACTION_DOSE_REMINDER: показує сповіщення «Час прийняти» і планує
- * фіналізацію через GRACE_MINUTES.
+ * ACTION_DOSE_REMINDER: показує сповіщення «Час прийняти» з кнопками
+ * «Прийняти» / «Відкласти» і планує фіналізацію через GRACE_MINUTES.
+ *
+ * ACTION_TAKE_DOSE (кнопка у сповіщенні): записує прийом у журнал
+ * (intakeTime = час дози), прибирає сповіщення, планує наступну дозу.
+ *
+ * ACTION_SNOOZE_DOSE (кнопка у сповіщенні): переносить дозу на
+ * +15 хвилин точним будильником; фіналізатор переплановується разом
+ * з дозою (FLAG_UPDATE_CURRENT), тож «прострочено» не запишеться.
  *
  * ACTION_FINALIZE_MISSED: якщо прийом так і не був відмічений — додає до
  * журналу запис «прострочено» (доза не зникає мовчки), і планує наступну дозу.
@@ -26,15 +33,31 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val medicationId = intent.getLongExtra(ReminderScheduler.EXTRA_MEDICATION_ID, -1L)
         if (medicationId <= 0) return
-        val scheduledAt = intent.getLongExtra(ReminderScheduler.EXTRA_SCHEDULED_AT, System.currentTimeMillis())
-        val action = intent.action
+        val scheduledAt = intent.getLongExtra(
+            ReminderScheduler.EXTRA_SCHEDULED_AT,
+            System.currentTimeMillis()
+        )
+        when (intent.action) {
+            ReminderScheduler.ACTION_DOSE_REMINDER -> goAsyncWork(context) { ctx ->
+                handleDose(ctx, medicationId, scheduledAt)
+            }
+            ReminderScheduler.ACTION_TAKE_DOSE -> goAsyncWork(context) { ctx ->
+                handleTake(ctx, medicationId, scheduledAt)
+            }
+            ReminderScheduler.ACTION_SNOOZE_DOSE -> goAsyncWork(context) { ctx ->
+                handleSnooze(ctx, medicationId)
+            }
+            ReminderScheduler.ACTION_FINALIZE_MISSED -> goAsyncWork(context) { ctx ->
+                handleFinalize(ctx, medicationId, scheduledAt)
+            }
+        }
+    }
+
+    private inline fun goAsyncWork(context: Context, crossinline block: suspend (Context) -> Unit) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                when (action) {
-                    ReminderScheduler.ACTION_DOSE_REMINDER -> handleDose(context, medicationId, scheduledAt)
-                    ReminderScheduler.ACTION_FINALIZE_MISSED -> handleFinalize(context, medicationId, scheduledAt)
-                }
+                block(context)
             } finally {
                 pending.finish()
             }
@@ -49,15 +72,38 @@ class AlarmReceiver : BroadcastReceiver() {
             ReminderScheduler.cancel(context, medicationId)
             return
         }
-        val mealText = if (med.takeBeforeMeal) " (до їжі)" else " (після їжі)"
-        NotificationHelper.showNotification(
-            context,
-            "Час прийняти ліки",
-            "${med.name} — ${med.dosageForm}$mealText",
-            med.id,
-            NotificationHelper.CHANNEL_REMINDERS
-        )
+        NotificationHelper.showDoseNotification(context, med, scheduledAt)
         ReminderScheduler.scheduleFinalize(context, medicationId, scheduledAt)
+    }
+
+    private suspend fun handleTake(context: Context, medicationId: Long, scheduledAt: Long) {
+        val db = PillshelfDatabase.getInstance(context)
+        val med = db.medicationDao().getMedicationByIdSync(medicationId) ?: return
+
+        // Запис «прийнято» з реальним часом дози (людина могла натиснути пізніше).
+        IntakeRepository(db.intakeHistoryDao(), db.medicationDao()).recordIntakeAt(
+            medication = med,
+            taken = true,
+            intakeTimeMillis = scheduledAt,
+            notes = "Прийнято (зі сповіщення)"
+        )
+
+        cancelNotification(context, medicationId)
+        scheduleNext(context, med)
+        com.example.pillshelf.widget.DoseWidget.updateAll(context)
+    }
+
+    private suspend fun handleSnooze(context: Context, medicationId: Long) {
+        val db = PillshelfDatabase.getInstance(context)
+        val med = db.medicationDao().getMedicationByIdSync(medicationId) ?: return
+        if (med.isOutOfStock()) {
+            ReminderScheduler.cancel(context, medicationId)
+            return
+        }
+        // Рівно +15 хвилин від зараз; schedule() також перепланує фіналізатор.
+        ReminderScheduler.schedule(context, medicationId, System.currentTimeMillis() + 15 * 60_000)
+        cancelNotification(context, medicationId)
+        com.example.pillshelf.widget.DoseWidget.updateAll(context)
     }
 
     private suspend fun handleFinalize(context: Context, medicationId: Long, scheduledAt: Long) {
@@ -86,15 +132,17 @@ class AlarmReceiver : BroadcastReceiver() {
             )
         )
         scheduleNext(context, med)
+        com.example.pillshelf.widget.DoseWidget.updateAll(context)
     }
 
-    private suspend fun scheduleNext(context: Context, med: com.example.pillshelf.data.model.Medication) {
-        // Для EVERY_N_HOURS рахуємо інтервал від "зараз", для решти — наступний слот.
-        val lastIntake = if (med.scheduleType == "EVERY_N_HOURS") {
-            LocalDateTime.now()
-        } else {
-            null
-        }
+    private suspend fun scheduleNext(context: Context, med: Medication) {
+        // Для EVERY_N_HOURS інтервал рахується від "зараз", для решти — наступний слот.
+        val lastIntake = if (med.scheduleType == "EVERY_N_HOURS") LocalDateTime.now() else null
         ReminderScheduler.scheduleNextFor(context, med, lastIntake)
+    }
+
+    private fun cancelNotification(context: Context, medicationId: Long) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        nm.cancel(medicationId.toInt())
     }
 }

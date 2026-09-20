@@ -9,6 +9,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.pillshelf.MainActivity
 import com.example.pillshelf.R
+import com.example.pillshelf.data.model.Medication
+import com.example.pillshelf.service.AlarmReceiver
 
 object NotificationHelper {
     const val CHANNEL_REMINDERS = "pillshelf_reminders"
@@ -76,5 +78,71 @@ object NotificationHelper {
             .build()
 
         notificationManager.notify(notificationId.toInt(), notification)
+    }
+
+    /**
+     * Сповіщення про дозу з кнопками дій: «Прийняти» і «Відкласти» —
+     * без відкриття застосунку. Обробка в AlarmReceiver.
+     */
+    fun showDoseNotification(context: Context, med: Medication, scheduledAt: Long) {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val openApp = PendingIntent.getActivity(
+            context,
+            med.id.toInt(),
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val takeIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ReminderScheduler.ACTION_TAKE_DOSE
+            putExtra(ReminderScheduler.EXTRA_MEDICATION_ID, med.id)
+            putExtra(ReminderScheduler.EXTRA_SCHEDULED_AT, scheduledAt)
+        }
+        val takePi = PendingIntent.getBroadcast(
+            context,
+            (med.id + 2_000_000).toInt(),
+            takeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ReminderScheduler.ACTION_SNOOZE_DOSE
+            putExtra(ReminderScheduler.EXTRA_MEDICATION_ID, med.id)
+        }
+        val snoozePi = PendingIntent.getBroadcast(
+            context,
+            (med.id + 3_000_000).toInt(),
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val mealText = if (med.takeBeforeMeal) " (до їжі)" else " (після їжі)"
+        val message = "${med.name} — ${med.dosageForm}$mealText"
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Час прийняти ліки")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(openApp)
+            .addAction(
+                NotificationCompat.Action(
+                    android.R.drawable.ic_input_add, "Прийняти", takePi
+                )
+            )
+            .addAction(
+                NotificationCompat.Action(
+                    android.R.drawable.ic_menu_close_clear_cancel, "Відкласти", snoozePi
+                )
+            )
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(med.id.toInt(), notification)
     }
 }

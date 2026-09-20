@@ -26,10 +26,22 @@
             </intent-filter>
         </activity>
 
-        <!-- Точні будильники доз + фіналізація пропущених доз. -->
+        <!-- Точні будильники доз + фіналізація пропущених доз + кнопки сповіщення. -->
         <receiver
             android:name=".service.AlarmReceiver"
             android:exported="false" />
+
+        <!-- Віджет: наступна доза + швидка відмітка прийому. -->
+        <receiver
+            android:name=".widget.DoseWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/pillshelf_widget_info" />
+        </receiver>
 
         <!-- Відновлення будильників після перезавантаження. -->
         <receiver

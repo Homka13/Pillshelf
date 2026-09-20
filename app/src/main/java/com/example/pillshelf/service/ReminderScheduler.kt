@@ -29,6 +29,8 @@ object ReminderScheduler {
 
     const val ACTION_DOSE_REMINDER = "com.example.pillshelf.ACTION_DOSE_REMINDER"
     const val ACTION_FINALIZE_MISSED = "com.example.pillshelf.ACTION_FINALIZE_MISSED"
+    const val ACTION_TAKE_DOSE = "com.example.pillshelf.ACTION_TAKE_DOSE"
+    const val ACTION_SNOOZE_DOSE = "com.example.pillshelf.ACTION_SNOOZE_DOSE"
     const val EXTRA_MEDICATION_ID = "extra_medication_id"
     const val EXTRA_SCHEDULED_AT = "extra_scheduled_at"
 
