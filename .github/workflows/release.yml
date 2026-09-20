@@ -52,7 +52,7 @@ jobs:
 
       # ── 3. Gradle ────────────────────────────────────────────────────────────
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # ── 4. Права виконання gradlew (Linux CI не зберігає chmod з git) ────────
       - name: Make gradlew executable
@@ -86,6 +86,7 @@ jobs:
 
       # ── 7. Знаходимо APK динамічно (AGP може генерувати різні назви) ─────────
       - name: Locate and rename APK
+        shell: bash
         run: |
           # AGP може видати app-release.apk або app-release-unsigned.apk
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
@@ -95,9 +96,14 @@ jobs:
             exit 1
           fi
           echo "Found APK: $APK_PATH"
+
+          # github.ref_name може містити "/" — напр. гілка ci/foo при
+          # workflow_dispatch. Без заміни шлях вказував би на неіснуючу
+          # теку release/Pillshelf-ci/ і cp падав би.
+          SAFE_REF="${GITHUB_REF_NAME//\//-}"
           mkdir -p release
-          cp "$APK_PATH" "release/Pillshelf-${{ github.ref_name }}.apk"
-          echo "APK_FINAL=release/Pillshelf-${{ github.ref_name }}.apk" >> $GITHUB_ENV
+          cp "$APK_PATH" "release/Pillshelf-${SAFE_REF}.apk"
+          echo "APK_FINAL=release/Pillshelf-${SAFE_REF}.apk" >> $GITHUB_ENV
 
       # ── 8. Верифікація підпису APK ───────────────────────────────────────────
       # Підтверджує що APK підписаний потрібним ключем, а не debug/unsigned.
