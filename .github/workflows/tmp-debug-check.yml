@@ -1,0 +1,24 @@
+name: TEMP debug build check
+on:
+  push:
+    branches: ['test/debug-build']
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: chmod +x gradlew
+      # Жодних RELEASE_* env — імітуємо чистий клон у стороннього розробника.
+      - name: assembleDebug on a clean clone
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Show debug APK and its signer
+        run: |
+          APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo "Debug APK: $APK"
+          APKSIGNER="${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner"
+          "$APKSIGNER" verify --print-certs "$APK" | grep -i "SHA-256\|Subject" | head -4
