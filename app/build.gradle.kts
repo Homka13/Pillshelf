@@ -27,12 +27,6 @@ android {
     }
 
     signingConfigs {
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
         create("releaseConfig") {
             // Значення беруться з env-змінних, які виставляє GitHub Actions.
             // Читаємо "м'яко": requireNotNull тут виконувався б на етапі конфігурації
@@ -49,7 +43,13 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debugConfig")
+            // Підпис не задаємо: AGP сам підписує debug згенерованим
+            // ~/.android/debug.keystore. Раніше тут був debugConfig, що
+            // вказував на ${rootDir}/debug.keystore — файл, якого немає в
+            // репозиторії (він під *.keystore у .gitignore), тож
+            // assembleDebug падав на будь-якому чистому клоні.
+            // Фіксований debug-сертифікат тут ні до чого не прив'язаний:
+            // ні Maps, ні Firebase у проєкті немає.
         }
         release {
             isMinifyEnabled = false
