@@ -20,7 +20,6 @@ import androidx.compose.material3.ElevatedFilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,7 +45,7 @@ fun RestockDialog(
     onConfirmRestock: (addedAmount: Int) -> Unit
 ) {
     var amountInput by remember { mutableStateOf("30") }
-    val quickPresets = listOf(10, 20, 30, 60, 100)
+    val quickPresets = listOf(10, 20, 30, 50, 60, 100)
     val parsedAmount = amountInput.toIntOrNull() ?: 0
 
     AlertDialog(
@@ -60,63 +59,52 @@ fun RestockDialog(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Restock Shelf", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Поповнити запас",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "${medication.name} (${medication.strength.ifBlank { medication.form.displayName }})",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
+                    text = medication.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Поточний залишок: ${medication.remainingQuantity} шт. (в упаковці: ${medication.totalQuantity})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Current shelf count:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${medication.stockQuantity} ${medication.unit}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    text = "Quick Presets:",
+                    text = "Швидкий вибір кількості:",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     quickPresets.forEach { preset ->
                         ElevatedFilterChip(
-                            selected = amountInput == preset.toString(),
+                            selected = parsedAmount == preset,
                             onClick = { amountInput = preset.toString() },
                             label = { Text("+$preset") },
-                            modifier = Modifier.testTag("preset_chip_$preset")
+                            colors = FilterChipDefaults.elevatedFilterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         )
                     }
                 }
@@ -126,26 +114,41 @@ fun RestockDialog(
                 OutlinedTextField(
                     value = amountInput,
                     onValueChange = { input ->
-                        if (input.all { it.isDigit() } && input.length <= 4) {
+                        if (input.all { it.isDigit() }) {
                             amountInput = input
                         }
                     },
-                    label = { Text("Quantity to add (${medication.unit})") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = { Text("Кількість для додавання") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("restock_input")
+                        .testTag("restock_quantity_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        Text(
+                            text = "шт.",
+                            modifier = Modifier.padding(end = 12.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 )
 
                 if (parsedAmount > 0) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "New Total: ${medication.stockQuantity + parsedAmount} ${medication.unit}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            text = "Новий залишок: ${medication.remainingQuantity + parsedAmount} шт.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
         },
@@ -157,17 +160,18 @@ fun RestockDialog(
                     }
                 },
                 enabled = parsedAmount > 0,
-                modifier = Modifier.testTag("confirm_restock_btn")
+                modifier = Modifier.testTag("confirm_restock_button"),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Add to Shelf")
+                Text("Додати")
             }
         },
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.testTag("cancel_restock_btn")
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Cancel")
+                Text("Скасувати")
             }
         }
     )

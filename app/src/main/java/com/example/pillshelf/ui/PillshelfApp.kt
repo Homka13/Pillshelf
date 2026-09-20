@@ -23,10 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.PriceChange
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,6 +63,7 @@ import com.example.pillshelf.ui.components.AddEditMedicationSheet
 import com.example.pillshelf.ui.components.MedicationDetailSheet
 import com.example.pillshelf.ui.components.RestockDialog
 import com.example.pillshelf.ui.screens.HistoryScreen
+import com.example.pillshelf.ui.screens.PricesScreen
 import com.example.pillshelf.ui.screens.ScheduleScreen
 import com.example.pillshelf.ui.screens.ShelfScreen
 import com.example.pillshelf.ui.viewmodel.PillshelfViewModel
@@ -72,9 +75,10 @@ enum class AppTab(
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
-    SHELF("Shelf", Icons.Filled.Inventory2, Icons.Outlined.Inventory2, "tab_shelf"),
-    SCHEDULE("Today", Icons.Filled.Schedule, Icons.Outlined.Schedule, "tab_schedule"),
-    HISTORY("History", Icons.Filled.History, Icons.Outlined.History, "tab_history")
+    SHELF("Аптечка", Icons.Filled.Inventory2, Icons.Outlined.Inventory2, "tab_shelf"),
+    SCHEDULE("Розклад", Icons.Filled.Schedule, Icons.Outlined.Schedule, "tab_schedule"),
+    PRICES("Ціни", Icons.Filled.PriceChange, Icons.Outlined.PriceChange, "tab_prices"),
+    HISTORY("Журнал", Icons.Filled.History, Icons.Outlined.History, "tab_history")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,29 +103,42 @@ fun PillshelfApp(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isExpandedScreen = maxWidth >= 600.dp
 
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Adaptive Navigation Rail for larger screens
-            if (isExpandedScreen) {
+        if (isExpandedScreen) {
+            // Adaptive wide layout: NavigationRail on the left
+            Row(modifier = Modifier.fillMaxSize()) {
                 NavigationRail(
-                    modifier = Modifier.fillMaxHeight(),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ) {
-                    Spacer(modifier = Modifier.padding(top = 16.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_pillshelf_icon),
-                            contentDescription = "Pillshelf",
-                            modifier = Modifier.size(32.dp).clip(CircleShape)
-                        )
+                    modifier = Modifier.testTag("desktop_navigation_rail"),
+                    header = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Medication,
+                                    contentDescription = "Pillshelf Logo",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text(
+                                text = "Pillshelf",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.padding(top = 24.dp))
-                    AppTab.values().forEach { tab ->
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    AppTab.entries.forEach { tab ->
                         NavigationRailItem(
                             selected = selectedTab == tab,
                             onClick = { selectedTab = tab },
@@ -135,10 +152,35 @@ fun PillshelfApp(
                             modifier = Modifier.testTag(tab.testTag)
                         )
                     }
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = 960.dp)
+                    ) {
+                        AppScreenContent(
+                            selectedTab = selectedTab,
+                            viewModel = viewModel,
+                            onMedicationClick = { med -> selectedMedicationDetail = med },
+                            onAddMedicationClick = {
+                                editingMedication = null
+                                showAddEditSheet = true
+                            },
+                            onRestockClick = { med -> restockingMedication = med }
+                        )
+                    }
                 }
             }
-
-            // Main Content Area
+        } else {
+            // Mobile standard layout: TopBar + Screen + Bottom Navigation
             Scaffold(
                 topBar = {
                     CenterAlignedTopAppBar(
@@ -147,13 +189,15 @@ fun PillshelfApp(
                                 Box(
                                     modifier = Modifier
                                         .size(32.dp)
-                                        .clip(CircleShape),
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.img_pillshelf_icon),
-                                        contentDescription = "Pillshelf Logo",
-                                        modifier = Modifier.size(32.dp)
+                                    Icon(
+                                        imageVector = Icons.Outlined.Medication,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -170,143 +214,151 @@ fun PillshelfApp(
                     )
                 },
                 bottomBar = {
-                    if (!isExpandedScreen) {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 6.dp
-                        ) {
-                            AppTab.values().forEach { tab ->
-                                NavigationBarItem(
-                                    selected = selectedTab == tab,
-                                    onClick = { selectedTab = tab },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selectedTab == tab) tab.selectedIcon else tab.unselectedIcon,
-                                            contentDescription = tab.title
-                                        )
-                                    },
-                                    label = { Text(tab.title) },
-                                    modifier = Modifier.testTag(tab.testTag)
-                                )
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .widthIn(max = 700.dp)
+                    NavigationBar(
+                        modifier = Modifier.testTag("bottom_navigation_bar"),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 8.dp
                     ) {
-                        AnimatedContent(
-                            targetState = selectedTab,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "tab_transition"
-                        ) { tab ->
-                            when (tab) {
-                                AppTab.SHELF -> ShelfScreen(
-                                    viewModel = viewModel,
-                                    onMedicationClick = { med ->
-                                        selectedMedicationDetail = med
-                                    },
-                                    onAddMedicationClick = {
-                                        editingMedication = null
-                                        showAddEditSheet = true
-                                    },
-                                    onRestockClick = { med ->
-                                        restockingMedication = med
-                                    }
-                                )
-                                AppTab.SCHEDULE -> ScheduleScreen(
-                                    viewModel = viewModel,
-                                    onAddMedicationClick = {
-                                        editingMedication = null
-                                        showAddEditSheet = true
-                                    }
-                                )
-                                AppTab.HISTORY -> HistoryScreen(
-                                    viewModel = viewModel
-                                )
-                            }
+                        AppTab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == tab,
+                                onClick = { selectedTab = tab },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selectedTab == tab) tab.selectedIcon else tab.unselectedIcon,
+                                        contentDescription = tab.title
+                                    )
+                                },
+                                label = { Text(tab.title) },
+                                modifier = Modifier.testTag(tab.testTag)
+                            )
                         }
                     }
+                }
+            ) { innerPadding ->
+                Box(modifier = Modifier.padding(innerPadding)) {
+                    AppScreenContent(
+                        selectedTab = selectedTab,
+                        viewModel = viewModel,
+                        onMedicationClick = { med -> selectedMedicationDetail = med },
+                        onAddMedicationClick = {
+                            editingMedication = null
+                            showAddEditSheet = true
+                        },
+                        onRestockClick = { med -> restockingMedication = med }
+                    )
                 }
             }
         }
-    }
 
-    // Add / Edit Medication BottomSheet
-    if (showAddEditSheet) {
-        AddEditMedicationSheet(
-            sheetState = addEditSheetState,
-            medicationToEdit = editingMedication,
-            onDismiss = {
-                scope.launch { addEditSheetState.hide() }.invokeOnCompletion {
-                    showAddEditSheet = false
-                    editingMedication = null
+        // Add / Edit Medication Bottom Sheet
+        if (showAddEditSheet) {
+            AddEditMedicationSheet(
+                sheetState = addEditSheetState,
+                medicationToEdit = editingMedication,
+                onDismiss = {
+                    scope.launch { addEditSheetState.hide() }.invokeOnCompletion {
+                        showAddEditSheet = false
+                        editingMedication = null
+                    }
+                },
+                onSave = { med ->
+                    if (editingMedication != null) {
+                        viewModel.updateMedication(med)
+                    } else {
+                        viewModel.addMedication(med)
+                    }
+                    scope.launch { addEditSheetState.hide() }.invokeOnCompletion {
+                        showAddEditSheet = false
+                        editingMedication = null
+                    }
                 }
-            },
-            onSave = { med ->
-                viewModel.saveMedication(med)
-                scope.launch { addEditSheetState.hide() }.invokeOnCompletion {
-                    showAddEditSheet = false
-                    editingMedication = null
-                }
-            }
-        )
-    }
+            )
+        }
 
-    // Medication Detail BottomSheet
-    selectedMedicationDetail?.let { med ->
-        MedicationDetailSheet(
-            medication = med,
-            currentEpochDay = viewModel.currentEpochDay,
-            sheetState = detailSheetState,
-            onDismiss = {
-                scope.launch { detailSheetState.hide() }.invokeOnCompletion {
-                    selectedMedicationDetail = null
+        // Medication Details Bottom Sheet
+        selectedMedicationDetail?.let { med ->
+            MedicationDetailSheet(
+                medication = med,
+                currentEpochDay = viewModel.currentEpochDay,
+                sheetState = detailSheetState,
+                onDismiss = {
+                    scope.launch { detailSheetState.hide() }.invokeOnCompletion {
+                        selectedMedicationDetail = null
+                    }
+                },
+                onEdit = {
+                    editingMedication = med
+                    scope.launch { detailSheetState.hide() }.invokeOnCompletion {
+                        selectedMedicationDetail = null
+                        showAddEditSheet = true
+                    }
+                },
+                onDelete = {
+                    viewModel.deleteMedication(med)
+                    scope.launch { detailSheetState.hide() }.invokeOnCompletion {
+                        selectedMedicationDetail = null
+                    }
+                },
+                onTakeDose = {
+                    viewModel.recordIntake(med, taken = true)
+                    scope.launch { detailSheetState.hide() }.invokeOnCompletion {
+                        selectedMedicationDetail = null
+                    }
+                },
+                onRestock = {
+                    restockingMedication = med
                 }
-            },
-            onEdit = {
-                editingMedication = med
-                scope.launch { detailSheetState.hide() }.invokeOnCompletion {
-                    selectedMedicationDetail = null
-                    showAddEditSheet = true
-                }
-            },
-            onRestock = {
-                restockingMedication = med
-            },
-            onTakeDose = {
-                viewModel.quickTakeDose(med)
-            },
-            onDelete = {
-                viewModel.deleteMedication(med)
-                scope.launch { detailSheetState.hide() }.invokeOnCompletion {
-                    selectedMedicationDetail = null
-                }
-            }
-        )
-    }
+            )
+        }
 
-    // Restock Dialog
-    restockingMedication?.let { med ->
-        RestockDialog(
-            medication = med,
-            onDismiss = { restockingMedication = null },
-            onConfirmRestock = { addedAmount ->
-                viewModel.restockMedication(med.id, addedAmount)
-                restockingMedication = null
-            }
-        )
+        // Restock Dialog
+        restockingMedication?.let { med ->
+            RestockDialog(
+                medication = med,
+                onDismiss = { restockingMedication = null },
+                onConfirmRestock = { addedAmount ->
+                    viewModel.restockMedication(med, addedAmount)
+                    restockingMedication = null
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppScreenContent(
+    selectedTab: AppTab,
+    viewModel: PillshelfViewModel,
+    onMedicationClick: (Medication) -> Unit,
+    onAddMedicationClick: () -> Unit,
+    onRestockClick: (Medication) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedContent(
+        targetState = selectedTab,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "AppScreenTransition",
+        modifier = modifier.fillMaxSize()
+    ) { tab ->
+        when (tab) {
+            AppTab.SHELF -> ShelfScreen(
+                viewModel = viewModel,
+                onMedicationClick = onMedicationClick,
+                onAddMedicationClick = onAddMedicationClick,
+                onRestockClick = onRestockClick
+            )
+            AppTab.SCHEDULE -> ScheduleScreen(
+                viewModel = viewModel,
+                onAddMedicationClick = onAddMedicationClick
+            )
+            AppTab.PRICES -> PricesScreen(
+                viewModel = viewModel,
+                onAddMedicationClick = onAddMedicationClick
+            )
+            AppTab.HISTORY -> HistoryScreen(
+                viewModel = viewModel
+            )
+        }
     }
 }

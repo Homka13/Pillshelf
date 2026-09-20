@@ -5,24 +5,30 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.pillshelf.data.model.DoseLog
+import com.example.pillshelf.data.model.Category
+import com.example.pillshelf.data.model.IntakeHistory
 import com.example.pillshelf.data.model.Medication
-import com.example.pillshelf.data.model.MedicationCategory
-import com.example.pillshelf.data.model.MedicationForm
-import com.example.pillshelf.data.model.ScheduleType
+import com.example.pillshelf.data.model.PriceHistory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @Database(
-    entities = [Medication::class, DoseLog::class],
-    version = 1,
+    entities = [
+        Medication::class,
+        IntakeHistory::class,
+        PriceHistory::class,
+        Category::class
+    ],
+    version = 2,
     exportSchema = false
 )
 abstract class PillshelfDatabase : RoomDatabase() {
     abstract fun medicationDao(): MedicationDao
-    abstract fun doseLogDao(): DoseLogDao
+    abstract fun intakeHistoryDao(): IntakeHistoryDao
+    abstract fun priceHistoryDao(): PriceHistoryDao
+    abstract fun categoryDao(): CategoryDao
 
     companion object {
         @Volatile
@@ -48,112 +54,188 @@ abstract class PillshelfDatabase : RoomDatabase() {
         ) : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Seed initial shelf items in background coroutine
                 CoroutineScope(Dispatchers.IO).launch {
                     val database = getInstance(context)
-                    val dao = database.medicationDao()
-                    val today = LocalDate.now().toEpochDay()
-
-                    val initialMeds = listOf(
-                        Medication(
-                            name = "Ibuprofen",
-                            brandOrGeneric = "Advil / Motrin",
-                            form = MedicationForm.TABLET,
-                            strength = "200 mg",
-                            category = MedicationCategory.PAIN_RELIEF,
-                            stockQuantity = 28,
-                            lowStockThreshold = 10,
-                            unit = "tablets",
-                            expiryDateEpochDays = today + 420,
-                            storageLocation = "Medicine Cabinet",
-                            instructions = "Take 1-2 tablets with food every 6-8 hours as needed for headache or muscle pain.",
-                            scheduleType = ScheduleType.AS_NEEDED,
-                            scheduledTimes = "",
-                            colorHex = 0xFFE11D48
-                        ),
-                        Medication(
-                            name = "Vitamin D3",
-                            brandOrGeneric = "Nature Made",
-                            form = MedicationForm.CAPSULE,
-                            strength = "2000 IU",
-                            category = MedicationCategory.DAILY_SUPPLEMENT,
-                            stockQuantity = 52,
-                            lowStockThreshold = 14,
-                            unit = "softgels",
-                            expiryDateEpochDays = today + 500,
-                            storageLocation = "Kitchen Shelf",
-                            instructions = "Take 1 softgel daily in the morning with a healthy fat-containing breakfast.",
-                            scheduleType = ScheduleType.DAILY,
-                            scheduledTimes = "08:00",
-                            colorHex = 0xFFF59E0B
-                        ),
-                        Medication(
-                            name = "Cetirizine HCl",
-                            brandOrGeneric = "Zyrtec",
-                            form = MedicationForm.TABLET,
-                            strength = "10 mg",
-                            category = MedicationCategory.ALLERGY_SINUS,
-                            stockQuantity = 4, // Low stock trigger
-                            lowStockThreshold = 8,
-                            unit = "tablets",
-                            expiryDateEpochDays = today + 260,
-                            storageLocation = "Bathroom Shelf",
-                            instructions = "Take 1 tablet in the evening. May cause mild drowsiness.",
-                            scheduleType = ScheduleType.DAILY,
-                            scheduledTimes = "21:00",
-                            colorHex = 0xFF0D9488
-                        ),
-                        Medication(
-                            name = "Amoxicillin",
-                            brandOrGeneric = "Generic",
-                            form = MedicationForm.CAPSULE,
-                            strength = "500 mg",
-                            category = MedicationCategory.PRESCRIPTION,
-                            stockQuantity = 12,
-                            lowStockThreshold = 5,
-                            unit = "capsules",
-                            expiryDateEpochDays = today + 25, // Expiring soon trigger
-                            storageLocation = "Medicine Cabinet",
-                            instructions = "Complete full course as directed by doctor. Take 1 capsule twice daily with a full glass of water.",
-                            scheduleType = ScheduleType.TWICE_DAILY,
-                            scheduledTimes = "08:00, 20:00",
-                            colorHex = 0xFF3B82F6
-                        ),
-                        Medication(
-                            name = "Omega-3 Fish Oil",
-                            brandOrGeneric = "Nordic Naturals",
-                            form = MedicationForm.CAPSULE,
-                            strength = "1200 mg",
-                            category = MedicationCategory.DAILY_SUPPLEMENT,
-                            stockQuantity = 40,
-                            lowStockThreshold = 10,
-                            unit = "capsules",
-                            expiryDateEpochDays = today + 320,
-                            storageLocation = "Refrigerator",
-                            instructions = "Take 1 capsule with noon meal.",
-                            scheduleType = ScheduleType.DAILY,
-                            scheduledTimes = "13:00",
-                            colorHex = 0xFF0284C7
-                        ),
-                        Medication(
-                            name = "Acetaminophen",
-                            brandOrGeneric = "Tylenol Extra Strength",
-                            form = MedicationForm.TABLET,
-                            strength = "500 mg",
-                            category = MedicationCategory.PAIN_RELIEF,
-                            stockQuantity = 22,
-                            lowStockThreshold = 6,
-                            unit = "tablets",
-                            expiryDateEpochDays = today + 600,
-                            storageLocation = "Medicine Cabinet",
-                            instructions = "Do not exceed 3000 mg in 24 hours. Avoid alcohol.",
-                            scheduleType = ScheduleType.AS_NEEDED,
-                            scheduledTimes = "",
-                            colorHex = 0xFF8B5CF6
-                        )
-                    )
-                    dao.insertAll(initialMeds)
+                    seedInitialData(database)
                 }
+            }
+        }
+
+        suspend fun seedInitialData(database: PillshelfDatabase) {
+            val medDao = database.medicationDao()
+            val categoryDao = database.categoryDao()
+            val priceDao = database.priceHistoryDao()
+            val intakeDao = database.intakeHistoryDao()
+
+            val today = LocalDate.now()
+            val todayEpochDay = today.toEpochDay()
+            val nowMillis = System.currentTimeMillis()
+
+            // 1. Seed Categories
+            val categories = listOf(
+                Category(name = "Аптечка", color = "#0D9488", icon = "ic_category_firstaid", sortOrder = 0),
+                Category(name = "Знеболювальні", color = "#E11D48", icon = "ic_category_pain", sortOrder = 1),
+                Category(name = "Вітаміни", color = "#D97706", icon = "ic_category_vitamins", sortOrder = 2),
+                Category(name = "Травлення", color = "#059669", icon = "ic_category_digestive", sortOrder = 3),
+                Category(name = "Рецептурні", color = "#7C3AED", icon = "ic_category_rx", sortOrder = 4),
+                Category(name = "Протизастудні", color = "#2563EB", icon = "ic_category_cold", sortOrder = 5)
+            )
+            categoryDao.insertAll(categories)
+
+            // 2. Seed realistic Ukrainian medications from SPEC
+            val med1Id = medDao.insert(
+                Medication(
+                    name = "Парацетамол",
+                    activeSubstance = "Paracetamol",
+                    dosageForm = "Таблетки 500 мг",
+                    manufacturer = "Київмедпрепарат",
+                    category = "Аптечка",
+                    totalQuantity = 30,
+                    remainingQuantity = 14,
+                    expiryDate = today.plusMonths(14).toString(),
+                    expiryDateEpochDays = today.plusMonths(14).toEpochDay(),
+                    scheduleType = "DAILY",
+                    timeOfDay = "MORNING,EVENING",
+                    takeBeforeMeal = false,
+                    notes = "Запити склянкою води після їжі",
+                    trackPrices = true,
+                    targetPrice = 35.0,
+                    colorHex = 0xFF0D9488
+                )
+            )
+
+            val med2Id = medDao.insert(
+                Medication(
+                    name = "Ібупрофен 400",
+                    activeSubstance = "Ibuprofen",
+                    dosageForm = "Капсули 400 мг",
+                    manufacturer = "Фармак",
+                    category = "Знеболювальні",
+                    totalQuantity = 20,
+                    remainingQuantity = 4, // low stock! <= 5
+                    expiryDate = today.plusMonths(18).toString(),
+                    expiryDateEpochDays = today.plusMonths(18).toEpochDay(),
+                    scheduleType = "EVERY_N_HOURS",
+                    intervalHours = 8,
+                    timeOfDay = "MORNING,AFTERNOON,EVENING",
+                    takeBeforeMeal = false,
+                    notes = "Приймати суворо після їжі. Не комбінувати з аспірином!",
+                    trackPrices = true,
+                    targetPrice = 75.0,
+                    colorHex = 0xFFE11D48
+                )
+            )
+
+            val med3Id = medDao.insert(
+                Medication(
+                    name = "Вітамін D3 2000 МО",
+                    activeSubstance = "Cholecalciferol",
+                    dosageForm = "Капсули",
+                    manufacturer = "Олідетрим",
+                    category = "Вітаміни",
+                    totalQuantity = 60,
+                    remainingQuantity = 48,
+                    expiryDate = today.plusDays(24).toString(), // expiring soon! < 30 days
+                    expiryDateEpochDays = today.plusDays(24).toEpochDay(),
+                    scheduleType = "DAILY",
+                    timeOfDay = "MORNING",
+                    takeBeforeMeal = false,
+                    notes = "Приймати під час сніданку з жирною їжею",
+                    trackPrices = true,
+                    targetPrice = 190.0,
+                    colorHex = 0xFFD97706
+                )
+            )
+
+            val med4Id = medDao.insert(
+                Medication(
+                    name = "Панкреатин 8000",
+                    activeSubstance = "Pancreatin",
+                    dosageForm = "Таблетки",
+                    manufacturer = "Здоров'я",
+                    category = "Травлення",
+                    totalQuantity = 50,
+                    remainingQuantity = 2, // low stock!
+                    expiryDate = today.plusMonths(12).toString(),
+                    expiryDateEpochDays = today.plusMonths(12).toEpochDay(),
+                    scheduleType = "DAILY",
+                    timeOfDay = "AFTERNOON,EVENING",
+                    takeBeforeMeal = true,
+                    notes = "Приймати безпосередньо перед або під час їжі",
+                    trackPrices = true,
+                    targetPrice = 60.0,
+                    colorHex = 0xFF059669
+                )
+            )
+
+            val med5Id = medDao.insert(
+                Medication(
+                    name = "Амоксицилін 500",
+                    activeSubstance = "Amoxicillin",
+                    dosageForm = "Таблетки 500 мг",
+                    manufacturer = "Дарниця",
+                    category = "Рецептурні",
+                    totalQuantity = 20,
+                    remainingQuantity = 16,
+                    expiryDate = today.plusMonths(10).toString(),
+                    expiryDateEpochDays = today.plusMonths(10).toEpochDay(),
+                    scheduleType = "COURSE",
+                    courseStartDate = today.toString(),
+                    courseDurationDays = 7,
+                    intervalHours = 8,
+                    timeOfDay = "MORNING,AFTERNOON,EVENING",
+                    takeBeforeMeal = false,
+                    notes = "Приймати через рівні проміжки (кожні 8 год). Не переривати курс!",
+                    trackPrices = false,
+                    targetPrice = 0.0,
+                    colorHex = 0xFF7C3AED
+                )
+            )
+
+            // 3. Seed Price History for Price Tracking & Trend Analysis
+            val priceHistoryList = listOf(
+                // Paracetamol history
+                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Бажає Здоров'я", price = 32.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
+                PriceHistory(medicationId = med1Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 31.90, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
+                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Подорожник", price = 34.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
+                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Бажає Здоров'я", price = 28.50, date = today.minusDays(25).toString(), dateEpochDays = todayEpochDay - 25, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
+
+                // Ibuprofen history
+                PriceHistory(medicationId = med2Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 69.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
+                PriceHistory(medicationId = med2Id, pharmacyName = "Аптека Бажає Здоров'я", price = 73.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
+                PriceHistory(medicationId = med2Id, pharmacyName = "1 СОЦІАЛЬНА АПТЕКА", price = 68.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
+                PriceHistory(medicationId = med2Id, pharmacyName = "Аптека Бажає Здоров'я", price = 82.00, date = today.minusDays(20).toString(), dateEpochDays = todayEpochDay - 20, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
+
+                // Vitamin D3 history
+                PriceHistory(medicationId = med3Id, pharmacyName = "Аптека Бажає Здоров'я", price = 188.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим"),
+                PriceHistory(medicationId = med3Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 184.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим"),
+                PriceHistory(medicationId = med3Id, pharmacyName = "Аптека Доброго Дня", price = 199.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим")
+            )
+            priceDao.insertAll(priceHistoryList)
+
+            // 4. Seed initial Intake history
+            val intakes = listOf(
+                IntakeHistory(
+                    medicationId = med1Id,
+                    medicationName = "Парацетамол",
+                    dosageForm = "Таблетки 500 мг",
+                    intakeTime = nowMillis - 3600000 * 3,
+                    actualTime = nowMillis - 3600000 * 3,
+                    taken = true,
+                    notes = "Ранковий прийом після їжі"
+                ),
+                IntakeHistory(
+                    medicationId = med3Id,
+                    medicationName = "Вітамін D3 2000 МО",
+                    dosageForm = "Капсули",
+                    intakeTime = nowMillis - 3600000 * 2,
+                    actualTime = nowMillis - 3600000 * 2,
+                    taken = true,
+                    notes = "Разом зі сніданком"
+                )
+            )
+            for (intake in intakes) {
+                intakeDao.insert(intake)
             }
         }
     }
