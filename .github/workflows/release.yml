@@ -104,6 +104,7 @@ jobs:
           mkdir -p release
           cp "$APK_PATH" "release/Pillshelf-${SAFE_REF}.apk"
           echo "APK_FINAL=release/Pillshelf-${SAFE_REF}.apk" >> $GITHUB_ENV
+          echo "SAFE_REF=${SAFE_REF}" >> $GITHUB_ENV
 
       # ── 8. Верифікація підпису APK ───────────────────────────────────────────
       # Підтверджує що APK підписаний потрібним ключем, а не debug/unsigned.
@@ -139,9 +140,9 @@ jobs:
 
       # ── 9. Upload artifact (доступний у Summary) ─────────────────────────────
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
-          name: pillshelf-${{ github.ref_name }}-apk
+          name: pillshelf-${{ env.SAFE_REF }}-apk
           path: ${{ env.APK_FINAL }}
           retention-days: 30
 
