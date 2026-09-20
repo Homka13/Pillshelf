@@ -17,7 +17,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.aistudio.pillshelf.shlfkb"
+        applicationId = "com.yukhymshulha.pillshelf"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -77,6 +77,13 @@ android {
     }
 }
 
+ksp {
+    // Схема Room експортується в git (app/schemas/) — це основа для
+    // чесних міграцій: будь-яка зміна версії БД має супроводжуватися
+    // новим JSON-файлом схеми в коміті.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -95,6 +102,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
     debugImplementation(libs.androidx.ui.tooling)
+    testImplementation(libs.junit)
 }
 
 // Жорсткий запобіжник: збирати release без ключа не можна.

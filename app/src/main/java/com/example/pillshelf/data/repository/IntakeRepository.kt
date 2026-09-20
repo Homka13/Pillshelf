@@ -40,6 +40,32 @@ class IntakeRepository(
         return intakeHistoryDao.insert(intake)
     }
 
+    /**
+     * Відмітка прийому ЗАДНІМ ЧИСЛОМ: людина випила ліки о 7 ранку,
+     * а кнопку натиснула опівдні. Залишок списується одразу,
+     * intakeTime = реальний час прийому, actualTime = момент відмітки.
+     */
+    suspend fun recordIntakeAt(
+        medication: Medication,
+        taken: Boolean,
+        intakeTimeMillis: Long,
+        notes: String = ""
+    ): Long {
+        if (taken) {
+            medicationDao.decrementRemainingQuantity(medication.id)
+        }
+        val intake = IntakeHistory(
+            medicationId = medication.id,
+            medicationName = medication.name,
+            dosageForm = medication.dosageForm,
+            intakeTime = intakeTimeMillis,
+            actualTime = System.currentTimeMillis(),
+            taken = taken,
+            notes = notes
+        )
+        return intakeHistoryDao.insert(intake)
+    }
+
     suspend fun undoIntake(intake: IntakeHistory) {
         if (intake.taken) {
             // Restore inventory when undid

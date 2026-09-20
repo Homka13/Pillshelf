@@ -359,6 +359,12 @@ fun AddEditMedicationSheet(
                     label = { Text("Курс лікування") },
                     modifier = Modifier.weight(1f)
                 )
+                FilterChip(
+                    selected = scheduleType == "AS_NEEDED",
+                    onClick = { scheduleType = "AS_NEEDED" },
+                    label = { Text("За потреби") },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -414,6 +420,14 @@ fun AddEditMedicationSheet(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
+                    )
+                }
+                "AS_NEEDED" -> {
+                    Text(
+                        text = "Прийом «за потреби» не має розкладу й нагадувань: " +
+                            "відмічайте прийоми вручну в графіку або журналі.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

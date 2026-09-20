@@ -38,3 +38,7 @@ google-services.json
 *.jks.b64
 release-signing-credentials.txt
 signing.properties
+
+# Local env / secrets — НІКОЛИ не комітити
+.env
+.env.local

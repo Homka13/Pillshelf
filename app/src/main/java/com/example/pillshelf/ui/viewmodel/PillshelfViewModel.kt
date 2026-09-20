@@ -1,10 +1,13 @@
 package com.example.pillshelf.ui.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.pillshelf.data.export.DataExporter
 import com.example.pillshelf.data.local.PillshelfDatabase
 import com.example.pillshelf.data.model.Category
 import com.example.pillshelf.data.model.IntakeHistory
@@ -20,6 +23,8 @@ import com.example.pillshelf.domain.usecase.AnalyzePriceTrendUseCase
 import com.example.pillshelf.domain.usecase.CalculateNextIntakeUseCase
 import com.example.pillshelf.domain.usecase.CheckMedicationInteractionsUseCase
 import com.example.pillshelf.service.NotificationHelper
+import com.example.pillshelf.service.ReminderScheduler
+import com.example.pillshelf.service.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,7 +45,11 @@ data class ScheduledDoseItem(
     val isTaken: Boolean = false,
     val isSkipped: Boolean = false,
     val historyId: Long? = null,
-    val loggedTimestamp: Long? = null
+    val loggedTimestamp: Long? = null,
+    // Час слота сьогодні (для DAILY) — основа для «прострочено» і відмітки заднім числом
+    val scheduledAtMillis: Long? = null,
+    // Слот минув, а прийом так і не відмітили — показуємо «Прострочено»
+    val isOverdue: Boolean = false
 )
 
 data class AdherenceSummary(
@@ -60,7 +69,8 @@ data class ShelfStats(
 data class TrackedMedicationPrice(
     val medication: Medication,
     val latestPrices: List<PriceHistory>,
-    val trendResult: AnalyzePriceTrendUseCase.TrendResult,
+    // null = реальних записів немає: жодних вигаданих трендів
+    val trendResult: AnalyzePriceTrendUseCase.TrendResult?,
     val bestPrice: Double,
     val bestPharmacy: String
 )
@@ -210,6 +220,18 @@ class PillshelfViewModel(
                             (it.notes.contains(slot, ignoreCase = true) || it.notes.contains(timeStr) || todayIntakes.size == 1)
                         }
 
+                        // Пропущена доза: слот минув більше ніж GRACE_MINUTES тому,
+                        // а прийом так і не відмітили — не даємо їй зникнути мовчки.
+                        val hour = timeStr.substringBefore(":").toInt()
+                        val minute = timeStr.substringAfter(":").toInt()
+                        val slotMillis = todayLocalDate
+                            .atTime(hour, minute)
+                            .atZone(ZoneId.systemDefault())
+                            .toInstant().toEpochMilli()
+                        val graceMillis = com.example.pillshelf.service.ReminderScheduler.GRACE_MINUTES * 60_000
+                        val overdue = match == null &&
+                            slotMillis + graceMillis < System.currentTimeMillis()
+
                         items.add(
                             ScheduledDoseItem(
                                 medication = med,
@@ -218,7 +240,9 @@ class PillshelfViewModel(
                                 isTaken = match?.taken == true,
                                 isSkipped = match?.taken == false,
                                 historyId = match?.id,
-                                loggedTimestamp = match?.actualTime
+                                loggedTimestamp = match?.actualTime,
+                                scheduledAtMillis = slotMillis,
+                                isOverdue = overdue
                             )
                         )
                     }
@@ -297,24 +321,26 @@ class PillshelfViewModel(
     val trackedPrices: StateFlow<List<TrackedMedicationPrice>> = _trackedPrices.asStateFlow()
 
     init {
-        // Load initial tracked prices when medications change
+        // Історія цін: показуємо ТІЛЬКИ реально отримані записи.
+        // Застосунок не синтезує ціни й тренди: якщо даних немає —
+        // UI чесно показує «ціни недоступні» (див. PricesScreen).
         viewModelScope.launch(Dispatchers.IO) {
             allMedications.collect { meds ->
                 val trackedMeds = meds.filter { it.trackPrices }
-                val list = mutableListOf<TrackedMedicationPrice>()
                 val db = PillshelfDatabase.getInstance(getApplication())
 
+                val list = mutableListOf<TrackedMedicationPrice>()
                 for (med in trackedMeds) {
                     val history = db.priceHistoryDao().getHistoryForMedicationSync(med.id)
-                    val trend = analyzePriceTrendUseCase.analyze(history)
                     val best = history.minByOrNull { it.price }
                     list.add(
                         TrackedMedicationPrice(
                             medication = med,
                             latestPrices = history.take(6),
-                            trendResult = trend,
+                            trendResult = if (history.isNotEmpty()) analyzePriceTrendUseCase.analyze(history)
+                            else null,
                             bestPrice = best?.price ?: 0.0,
-                            bestPharmacy = best?.pharmacyName ?: "Аптека"
+                            bestPharmacy = best?.pharmacyName ?: ""
                         )
                     )
                 }
@@ -391,6 +417,9 @@ class PillshelfViewModel(
                 notes = if (slotNotes.isNotBlank()) slotNotes else if (taken) "Прийнято" else "Пропущено"
             )
 
+            // Плануємо наступний точний будильник (графік рухається від факту прийому)
+            ReminderScheduler.scheduleNextFor(getApplication(), medication, lastIntake = java.time.LocalDateTime.now())
+
             // If stock reaches low threshold, show notification per AC-3
             val newStock = medication.remainingQuantity - 1
             if (taken && newStock <= 5) {
@@ -414,6 +443,75 @@ class PillshelfViewModel(
             val item = db.intakeHistoryDao().getById(historyId)
             if (item != null) {
                 intakeRepository.undoIntake(item)
+            }
+        }
+    }
+
+    /**
+     * «Відкласти» на +15 хвилин: точний будильник на запланований час + 15 хв.
+     */
+    fun snoozeDose(medication: Medication) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val next = calculateNextIntakeUseCase.calculateNextIntake(medication) ?: return@launch
+            val triggerAt = next.plusMinutes(SNOOZE_MINUTES)
+                .atZone(java.time.ZoneId.systemDefault())
+                .toInstant().toEpochMilli()
+            ReminderScheduler.schedule(getApplication(), medication.id, triggerAt)
+        }
+    }
+
+    /**
+     * Відмітка прийому заднім числом: людина випила ліки раніше,
+     * а кнопку натиснула пізніше. Запис у журналі отримує реальний час прийому.
+     */
+    fun recordIntakeRetroactive(medication: Medication, taken: Boolean, intakeTimeMillis: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            intakeRepository.recordIntakeAt(
+                medication = medication,
+                taken = taken,
+                intakeTimeMillis = intakeTimeMillis,
+                notes = if (taken) "Прийнято (відмічено заднім числом)" else "Пропущено (відмічено заднім числом)"
+            )
+        }
+    }
+
+    /** Чи дозволені точні будильники (стан для налаштувань/графіку). */
+    fun isExactAlarmsAllowed(): Boolean =
+        ReminderScheduler.canScheduleExact(getApplication())
+
+    /** Інтент на системний екран запиту точних будильників; null — не потрібен. */
+    fun exactAlarmSettingsIntent(): Intent? =
+        ReminderScheduler.exactAlarmSettingsIntent(getApplication())
+
+    /** Моніторинг цін: за замовчуванням вимкнений, вмикається лише вручну. */
+    private val _priceMonitoringEnabled =
+        MutableStateFlow(SettingsRepository.isPriceMonitoringEnabled(application))
+    val priceMonitoringEnabled: StateFlow<Boolean> = _priceMonitoringEnabled.asStateFlow()
+
+    fun setPriceMonitoring(enabled: Boolean) {
+        SettingsRepository.setPriceMonitoringEnabled(getApplication(), enabled)
+        _priceMonitoringEnabled.value = enabled
+    }
+
+    // ── Експорт даних (єдиний бекап: allowBackup="false") ───────────────────
+
+    private val dataExporter by lazy { DataExporter(PillshelfDatabase.getInstance(getApplication())) }
+
+    fun exportFileName(): String = dataExporter.defaultFileName()
+
+    fun exportSummary(onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            onReady(dataExporter.exportSummary())
+        }
+    }
+
+    fun exportDataTo(uri: Uri, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                dataExporter.exportToUri(uri, getApplication())
+                onResult(Result.success(dataExporter.exportSummary()))
+            } catch (e: Exception) {
+                onResult(Result.failure(e))
             }
         }
     }
@@ -455,15 +553,15 @@ class PillshelfViewModel(
                 val list = mutableListOf<TrackedMedicationPrice>()
                 for (med in tracked) {
                     val history = db.priceHistoryDao().getHistoryForMedicationSync(med.id)
-                    val trend = analyzePriceTrendUseCase.analyze(history)
                     val best = history.minByOrNull { it.price }
                     list.add(
                         TrackedMedicationPrice(
                             medication = med,
                             latestPrices = history.take(6),
-                            trendResult = trend,
+                            trendResult = if (history.isNotEmpty()) analyzePriceTrendUseCase.analyze(history)
+                            else null,
                             bestPrice = best?.price ?: 0.0,
-                            bestPharmacy = best?.pharmacyName ?: "Аптека"
+                            bestPharmacy = best?.pharmacyName ?: ""
                         )
                     )
                 }
@@ -487,6 +585,8 @@ class PillshelfViewModel(
     }
 
     companion object {
+        private const val SNOOZE_MINUTES = 15L
+
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

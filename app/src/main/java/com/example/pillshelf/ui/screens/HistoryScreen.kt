@@ -20,23 +20,30 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Undo
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pillshelf.data.model.IntakeHistory
 import com.example.pillshelf.ui.theme.StatusSuccess
@@ -52,6 +59,16 @@ fun HistoryScreen(
     modifier: Modifier = Modifier
 ) {
     val history by viewModel.allHistory.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // SAF-ланчер експорту: користувач обирає, куди зберегти JSON-бекап.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportDataTo(uri) { }
+        }
+    }
 
     val totalCount = history.size
     val takenCount = history.count { it.taken }
@@ -68,12 +85,30 @@ fun HistoryScreen(
         // Header
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Журнал прийомів",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Журнал прийомів",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    OutlinedButton(
+                        onClick = { exportLauncher.launch(viewModel.exportFileName()) },
+                        modifier = Modifier.testTag("export_data_button")
+                    ) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Експорт")
+                    }
+                }
                 Text(
                     text = "Історія виконаних та пропущених прийомів ліків",
                     style = MaterialTheme.typography.bodyMedium,

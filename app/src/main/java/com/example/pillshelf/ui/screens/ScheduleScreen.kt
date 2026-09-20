@@ -208,6 +208,13 @@ fun ScheduleScreen(
                     },
                     onUndo = {
                         item.historyId?.let { viewModel.undoIntake(it) }
+                    },
+                    onMarkRetroactive = { scheduledAtMillis ->
+                        viewModel.recordIntakeRetroactive(
+                            medication = item.medication,
+                            taken = true,
+                            intakeTimeMillis = scheduledAtMillis
+                        )
                     }
                 )
             }

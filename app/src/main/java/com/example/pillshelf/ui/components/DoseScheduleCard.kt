@@ -56,6 +56,7 @@ fun DoseScheduleCard(
     onMarkTaken: () -> Unit,
     onMarkSkipped: () -> Unit,
     onUndo: () -> Unit,
+    onMarkRetroactive: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isCompleted = item.isTaken || item.isSkipped
@@ -147,6 +148,20 @@ fun DoseScheduleCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    item.isOverdue -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StatusError.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Прострочено",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusError
                             )
                         }
                     }
@@ -296,6 +311,28 @@ fun DoseScheduleCard(
                     }
                 }
             } else {
+                if (item.isOverdue && item.scheduledAtMillis != null) {
+                    // Відмітка заднім числом: людина випила ліки за розкладом,
+                    // але кнопку натиснула пізніше. Час прийому = час слота.
+                    OutlinedButton(
+                        onClick = { onMarkRetroactive(item.scheduledAtMillis) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .testTag("retroactive_dose_button_${item.medication.id}"),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val slotTime = DateTimeFormatter.ofPattern("HH:mm")
+                            .format(Instant.ofEpochMilli(item.scheduledAtMillis).atZone(ZoneId.systemDefault()))
+                        Text("Випив вчасно (о $slotTime) — відмітити")
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

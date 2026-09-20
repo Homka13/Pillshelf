@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-3DDC84.svg?style=flat&logo=android" alt="Android" />
-  <img src="https://img.shields.io/badge/Kotlin-2.2-7F52FF.svg?style=flat&logo=kotlin" alt="Kotlin" />
+  <img src="https://img.shields.io/badge/Kotlin-2.3-7F52FF.svg?style=flat&logo=kotlin" alt="Kotlin" />
   <img src="https://img.shields.io/badge/Jetpack%20Compose-M3-4285F4.svg?style=flat" alt="Compose" />
   <img src="https://img.shields.io/badge/Room%20DB-2.7-009688.svg?style=flat" alt="Room" />
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat" alt="License" />
@@ -27,9 +27,9 @@
 ## 🇺🇦 Українська версія
 
 ### 📖 Огляд проекту (Project Overview)
-**Pillshelf** — це сучасний, приватний та повністю автономний (offline-first) Android-застосунок, розроблений для комплексного контролю домашньої аптечки, розкладу прийому медикаментів, відстеження термінів придатності та моніторингу цін у провідних аптечних мережах України з інтеграцією швидкого пошуку через сервіс Tabletki.ua.
+**Pillshelf** — це сучасний, приватний та повністю автономний (offline-first) Android-застосунок для контролю домашньої аптечки, розкладу прийому медикаментів і відстеження термінів придатності. Застосунок не має власних серверів: єдиний мережевий контакт — необов'язковий пошук цін на сайті Tabletki.ua (див. нижче).
 
-Усі персональні дані, історія прийомів та списки медикаментів зберігаються виключно на вашому пристрої в локальній базі даних без передачі на сторонні сервери.
+**Приватність.** Усі персональні дані, історія прийомів та списки медикаментів зберігаються виключно на вашому пристрої в локальній базі даних (Room). Хмарне резервне копіювання вимкнене (`allowBackup="false"`); натомість є ручний експорт усіх даних у JSON-файл. Виняток щодо мережі: якщо ви **самі** увімкнули фоновий моніторинг цін (він вимкнений за замовчуванням), назва препарату надсилається на tabletki.ua для пошуку. Жодних аналітиків, рекламних SDK чи трекерів немає.
 
 ---
 
@@ -63,26 +63,36 @@
   - **«Пропустити»**: реєструє пропуск без списання залишку.
 - **Індикатор прогресу дня**: прогрес-бар виконання щоденного плану та відсоток завершення.
 
-#### 3. 💰 Моніторинг цін та аптеки України (Prices & Aggregation)
-- **Порівняння цін**: відображення цін у популярних українських аптечних мережах (АНЦ, Бажаємо Здоров'я, Аптека Подорож, Аптека 9-1-1).
-- **Аналізатор цінових трендів**: розрахунок динаміки за останні 30 днів (Зростання $\nearrow$, Падіння $\searrow$, Стабільна $\rightarrow$) із зазначенням відсотка.
-- **Відстеження цільової ціни**: налаштування бажаного порогу вартості для отримання сповіщення про вигідну покупку.
-- **Інтеграція з Tabletki.ua**: прямий перехід до сторінки ліків на сайті Tabletki.ua в один клік для перевірки наявності та бронювання.
+#### 3. 💰 Ціни та аптеки України (Prices & Tabletki.ua)
+- **Чесний підхід до даних**: застосунок показує лише ціни, реально отримані від сервісу Tabletki.ua. Вигадані чи «орієнтовні» ціни не генеруються ніколи.
+- **Поточне обмеження (вересень 2026)**: API Tabletki.ua блокує запити з не-браузерних клієнтів (Cloudflare, HTTP 403), тому автоматичне порівняння цін недоступне — екран чесно показує «ціни недоступні».
+- **Швидкий перехід на Tabletki.ua**: кнопка «Відкрити в tabletki.ua» для кожного препарату — пошук наявності та цін у браузері, де обмежень немає.
+- **Опціональна фонова перевірка**: вимикач у застосунку, вимкнений за замовчуванням. Якщо сервіс знову почне відповідати, моніторинг поновиться; тренди рахуються лише з реально отриманих записів.
 
-#### 4. ⚠️ Автоматичний аналізатор лікарських взаємодій
+#### 4. ⚠️ Підказки щодо лікарських взаємодій (кілька вбудованих правил)
+> **Це НЕ повна перевірка взаємодій.** Перевірено лише кілька простих правил — завжди показується, що це підказки, а не медичний висновок.
+
 - **Захист від дублювання парацетамолу**: виявлення одночасного прийому комбінованих чаїв від застуди (Фервекс, Терафлю тощо) та парацетамолу в таблетках для запобігання гепатотоксичності.
 - **Попередження про НПЗП**: виявлення одночасного вживання кількох нестероїдних протизапальних засобів (ібупрофен, аспірин, диклофенак).
 - **Правила прийому антибіотиків**: нагадування про проходження повного курсу лікування.
+- **Медичний дисклеймер**: застосунок — засіб обліку і не замінює лікаря чи фармацевта.
 
-#### 5. 📜 Журнал прийому та аналітика (History Log)
+#### 5. 📜 Журнал прийомів та аналітика (History Log)
 - Хронологічна стрічка всіх записів прийомів із часовими мітками.
 - Розрахунок відсотка дотримання схеми лікування (Adherence rate).
 - Функція **«Скасувати»**: скасування помилкового запису з поверненням списаної дози в аптечку.
+- **Прострочені дози**: якщо на нагадування не відповіли, доза позначається «Прострочено» в графіку і не зникає мовчки.
+- **Відмітка заднім числом**: можливість відмітити прийом реальним часом («випив вчасно»), а не моментом натискання кнопки.
+- **Експорт даних**: кнопка «Експорт» у журналі — JSON-копія аптечки та історії прийомів через системне діалогове вікно збереження.
 
-#### 6. 🔔 Сповіщення та фонові служби (WorkManager)
-- `ReminderWorker`: періодичний перегляд розкладу кожні 15 хвилин та відправка системних повідомлень.
-- `PriceCheckWorker`: фонова перевірка зниження цін кожні 12 годин.
+#### 6. 🔔 Нагадування (точні будильники + WorkManager)
+- **Точні будильники `setAlarmClock()`**: сповіщення про дозу в потрібну хвилину — не підпадають під обмеження Doze, показують системну іконку будильника.
+- **Фіналізація пропущених доз**: якщо прийом не відмічено протягом 30 хвилин після нагадування, у журналі з'являється запис «Прострочено».
+- **Статус дозволу**: екран розкладу показує, чи дозволені точні будильники, і веде на `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`.
+- `ReminderWorker`: страховий перегляд розкладу кожні 15 хвилин.
+- `PriceCheckWorker`: фонова перевірка цін кожні 12 годин — **вимкнена за замовчуванням**, вмикається вручну.
 - Сповіщення про низький або вичерпаний запас ліків.
+- Відновлення будильників після перезавантаження пристрою (`BootReceiver`).
 
 ---
 
@@ -102,24 +112,25 @@
    ```
 2. Зберіть проект за допомогою Gradle:
    ```bash
-   gradle assembleDebug
+   ./gradlew assembleDebug
    ```
 3. Запустіть юніт-тести:
    ```bash
-   gradle testDebugUnitTest
+   ./gradlew testDebugUnitTest
    ```
 4. Встановіть APK на підключений пристрій або емулятор:
    ```bash
-   gradle installDebug
+   ./gradlew installDebug
    ```
 
 ---
 
 ### 🗺️ План розвитку проекту (Roadmap)
 - [x] **Базовий облік аптечки**: додавання ліків, відстеження залишків та термінів придатності.
-- [x] **Розклад та нагадування**: прийом ліків за розкладом, списання кількості, сповіщення через WorkManager.
-- [x] **Моніторинг цін в аптеках України**: тренди цін та швидкий перехід до Tabletki.ua.
-- [x] **Аналізатор взаємодій**: попередження про дублювання парацетамолу та комбінації НПЗП.
+- [x] **Розклад та нагадування**: прийом ліків за розкладом, списання кількості, точні будильники (`setAlarmClock`).
+- [x] **Швидкий перехід до Tabletki.ua**: чесна робота з цінами — тільки реальні дані, без вигадок.
+- [x] **Підказки щодо взаємодій**: попередження про дублювання парацетамолу та комбінації НПЗП (кілька вбудованих правил).
+- [x] **Експорт даних у JSON**: ручна копія аптечки та журналу (єдиний бекап, бо хмарний вимкнено).
 - [ ] **Сканування штрих-кодів та QR-кодів**: швидке додавання препаратів за допомогою камери пристрою.
 - [ ] **Підтримка NFC-міток**: прийом ліків шляхом піднесення смартфону до флакона з NFC-стікером.
 - [ ] **Експорт медичного звіту у PDF**: формування звіту прийому та залишків для сімейного лікаря.
@@ -133,9 +144,9 @@
 ## 🇬🇧 English Version
 
 ### 📖 Project Overview
-**Pillshelf** is a modern, private, and fully offline-first Android application crafted for home medicine cabinet organization, medication adherence tracking, expiration monitoring, drug interaction alerts, and Ukrainian pharmacy price tracking with direct Tabletki.ua integration.
+**Pillshelf** is a modern, private, offline-first Android application for home medicine cabinet organization, medication scheduling, and expiration monitoring. The app runs no servers of its own: its only network contact is the optional price search on Tabletki.ua (see below).
 
-All personal health data, medication inventory, and intake logs remain securely stored on your device in an encrypted/local database without external transmission.
+**Privacy.** All personal health data, medication inventory, and intake logs remain on your device in a local Room database. Cloud backup is disabled (`allowBackup="false"`); instead, the app offers a manual export of all data to a JSON file. Network exception: if **you** enable background price monitoring (disabled by default), medication names are sent to tabletki.ua for search. There are no analytics, ad SDKs, or trackers.
 
 ---
 
@@ -169,26 +180,36 @@ All personal health data, medication inventory, and intake logs remain securely 
   - **"Skip"**: Records a skipped dose without decrementing shelf stock.
 - **Daily Adherence Indicator**: Visual progress bar reflecting completed daily doses.
 
-#### 3. 💰 Price Tracking & Ukrainian Pharmacy Aggregation
-- **Multi-Chain Price Monitoring**: Track and compare prices from major Ukrainian pharmacy chains (ANC, Bazhaiemo Zdorovia, Podorozh, Apteka 9-1-1).
-- **30-Day Trend Analysis**: Automated trend identification (Rising $\nearrow$, Falling $\searrow$, Stable $\rightarrow$) with percentage change.
-- **Target Price Alerts**: Configure desired price thresholds to purchase at optimal times.
-- **Tabletki.ua Integration**: One-click shortcut to check availability and reserve medications via Tabletki.ua.
+#### 3. 💰 Prices & Ukrainian Pharmacies (Tabletki.ua)
+- **Honest data policy**: the app only shows prices actually received from Tabletki.ua. Fabricated or "estimated" prices are never generated.
+- **Current limitation (September 2026)**: the Tabletki.ua API blocks non-browser clients (Cloudflare, HTTP 403), so automated price comparison is unavailable — the screen honestly shows "prices unavailable".
+- **Quick Tabletki.ua shortcut**: a "Open in tabletki.ua" button per medication — availability and prices open in the browser, where no restrictions apply.
+- **Optional background check**: an in-app toggle, disabled by default. If the service becomes reachable again, monitoring resumes; trends are computed only from actually received records.
 
-#### 4. ⚠️ Automated Drug-Drug Interaction Checker
+#### 4. ⚠️ Medication Interaction Hints (a few built-in rules)
+> **This is NOT a full interaction checker.** Only a handful of simple rules are checked — the UI always makes clear these are hints, not medical advice.
+
 - **Paracetamol Duplication Guard**: Detects concurrent usage of paracetamol powders/hot drinks (Fervex, Theraflu) and standard tablets to prevent overdose.
 - **NSAID Co-Administration Warning**: Warns against taking multiple non-steroidal anti-inflammatory drugs simultaneously.
-- **Antibiotic Course Guidance**: Enforces full course completion reminders.
+- **Antibiotic Course Guidance**: Full course completion reminders.
+- **Medical disclaimer**: the app is a tracking tool and does not replace a doctor or pharmacist.
 
 #### 5. 📜 Intake History & Compliance Analytics
 - Chronological timeline of all intake events (taken, skipped).
 - Overall treatment compliance percentage (Adherence rate).
 - **Undo Action**: Revert accidental intake logs, restoring shelf stock immediately.
+- **Overdue doses**: if a reminder goes unanswered, the dose is marked "Overdue" in the schedule instead of silently disappearing.
+- **Retroactive logging**: mark a dose with its real time ("taken on time"), not the moment the button was pressed.
+- **Data export**: an "Export" button in the history screen — a JSON copy of the cabinet and intake log via the system save dialog.
 
-#### 6. 🔔 Background Workers & Notifications (WorkManager)
-- `ReminderWorker`: Periodic intake evaluations every 15 minutes sending timely Android notifications.
-- `PriceCheckWorker`: Periodic 12-hour background checks monitoring price drops and target alerts.
+#### 6. 🔔 Reminders (Exact Alarms + WorkManager)
+- **Exact alarms via `setAlarmClock()`**: dose notifications fire on time — exempt from Doze restrictions, show the system alarm icon.
+- **Missed-dose finalization**: if an intake is not confirmed within 30 minutes of the reminder, an "Overdue" entry is written to the history.
+- **Permission status**: the schedule screen shows whether exact alarms are allowed and links to `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`.
+- `ReminderWorker`: a 15-minute safety-net schedule sweep.
+- `PriceCheckWorker`: 12-hour background price check — **disabled by default**, enabled manually.
 - Low stock and out-of-stock notification triggers.
+- Alarm restoration after device reboot (`BootReceiver`).
 
 ---
 
@@ -208,24 +229,25 @@ All personal health data, medication inventory, and intake logs remain securely 
    ```
 2. Build the debug APK:
    ```bash
-   gradle assembleDebug
+   ./gradlew assembleDebug
    ```
 3. Run unit tests:
    ```bash
-   gradle testDebugUnitTest
+   ./gradlew testDebugUnitTest
    ```
 4. Install onto a connected device or emulator:
    ```bash
-   gradle installDebug
+   ./gradlew installDebug
    ```
 
 ---
 
 ### 🗺️ Project Roadmap
 - [x] **Core Medicine Cabinet**: Inventory management, stock levels, and expiration monitoring.
-- [x] **Intake Schedule & Adherence**: Daily dose tracking, stock auto-decrement, WorkManager notifications.
-- [x] **Pharmacy Price Tracker**: Price trends across Ukrainian pharmacies with Tabletki.ua integration.
-- [x] **Drug Interaction Screening**: Paracetamol duplication and multi-NSAID warnings.
+- [x] **Intake Schedule & Reminders**: Daily dose tracking, stock auto-decrement, exact alarms (`setAlarmClock`).
+- [x] **Tabletki.ua Shortcut**: Honest price handling — only real data, never fabricated.
+- [x] **Interaction Hints**: Paracetamol duplication and multi-NSAID warnings (a few built-in rules).
+- [x] **JSON Data Export**: Manual backup of the cabinet and intake log (the only backup, since cloud is disabled).
 - [ ] **Barcode & QR Code Scanner**: Swift medication entry via device camera.
 - [ ] **NFC Tag Logging**: Tap medicine box NFC stickers to mark doses as taken.
 - [ ] **PDF Medical Report Export**: Generate comprehensive adherence reports for doctors.

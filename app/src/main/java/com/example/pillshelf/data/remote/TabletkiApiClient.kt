@@ -5,10 +5,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
+/**
+ * Клієнт tabletki.ua.
+ *
+ * ВАЖЛИВО (чесність даних): застосунок НЕ генерує і не підставляє
+ * вигадані ціни. Якщо відповідь недоступна (403 Cloudflare, таймаут,
+ * незнайомий формат) — повертається порожній список, а UI показує
+ * «ціни недоступні» з кнопкою переходу на Tabletki.ua.
+ *
+ * Станом на 2026-09: /api/search віддає HTTP 403 (Cloudflare) для
+ * не-браузерних клієнтів, тож мережеві ціни фактично недоступні;
+ * єдиний робочий шлях — веб-посилання на пошук Tabletki.ua.
+ */
 class TabletkiApiClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -18,111 +29,61 @@ class TabletkiApiClient(
     companion object {
         const val BASE_URL = "https://tabletki.ua"
         const val SEARCH_WEB_URL = "https://tabletki.ua/uk/search/?q="
+
+        // Нейтральний UA: не видаваємо додаток і не намагаємося обійти
+        // захист — просто коректно представляємо HTTP-клієнт.
+        const val USER_AGENT =
+            "Mozilla/5.0 (Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36"
     }
 
+    /**
+     * Повертає ціни з tabletki.ua або ПОРОЖНІЙ список, якщо дані
+     * недоступні. Ніколи не повертає сфабриковані значення.
+     */
     suspend fun searchDrugPrices(drugName: String): List<PriceInfo> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(drugName.trim(), "UTF-8")
-        val webUrl = "$SEARCH_WEB_URL$encoded"
-
         try {
-            // Attempt remote query with mobile headers
             val request = Request.Builder()
                 .url("$BASE_URL/api/search?q=$encoded")
-                .header("User-Agent", "Pillshelf-Android/1.0 (Privacy-First)")
+                .header("User-Agent", USER_AGENT)
                 .header("Accept", "application/json")
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val body = response.body?.string()
-                if (!body.isNullOrBlank()) {
-                    val json = JSONObject(body)
-                    if (json.has("prices")) {
-                        val pricesArray = json.getJSONArray("prices")
-                        val list = mutableListOf<PriceInfo>()
-                        for (i in 0 until pricesArray.length()) {
-                            val item = pricesArray.getJSONObject(i)
-                            list.add(
-                                PriceInfo(
-                                    pharmacyName = item.optString("pharmacy", "Аптека"),
-                                    price = item.optDouble("price", 0.0),
-                                    currency = item.optString("currency", "UAH"),
-                                    url = item.optString("url", webUrl),
-                                    inStock = item.optBoolean("in_stock", true)
-                                )
-                            )
-                        }
-                        if (list.isNotEmpty()) return@withContext list
-                    }
-                }
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                parsePrices(body, fallbackUrl = "$SEARCH_WEB_URL$encoded")
             }
         } catch (e: Exception) {
-            // Handled with graceful fallback below
+            // Мережа недоступна / таймаут — чесний порожній результат.
+            emptyList()
         }
-
-        // Offline / Fallback prices based on drug name benchmarks
-        generateBenchmarkPrices(drugName, webUrl)
     }
 
-    private fun generateBenchmarkPrices(drugName: String, webUrl: String): List<PriceInfo> {
-        val lower = drugName.lowercase()
-        val basePrice = when {
-            lower.contains("парацетамол") || lower.contains("paracetamol") -> 32.50
-            lower.contains("ібупрофен") || lower.contains("ibuprofen") -> 74.00
-            lower.contains("вітамін d") || lower.contains("вітамін д") -> 185.00
-            lower.contains("панкреатин") -> 58.00
-            lower.contains("амоксицилін") -> 115.00
-            lower.contains("цитрамон") -> 28.00
-            lower.contains("омепразол") -> 62.00
-            lower.contains("валідол") -> 22.00
-            lower.contains("дротаверин") || lower.contains("но-шпа") -> 85.00
-            lower.contains("спрей") -> 120.00
-            else -> 65.00
+    /** Парсинг відповіді; незнайомий формат => порожній список (не вигадки). */
+    private fun parsePrices(body: String, fallbackUrl: String): List<PriceInfo> {
+        return try {
+            val json = org.json.JSONObject(body)
+            if (!json.has("prices")) return emptyList()
+            val pricesArray = json.getJSONArray("prices")
+            val list = mutableListOf<PriceInfo>()
+            for (i in 0 until pricesArray.length()) {
+                val item = pricesArray.getJSONObject(i)
+                val price = item.optDouble("price", Double.NaN)
+                if (price.isNaN() || price <= 0.0) continue
+                list.add(
+                    PriceInfo(
+                        pharmacyName = item.optString("pharmacy", "").ifBlank { "Аптека" },
+                        price = price,
+                        currency = item.optString("currency", "UAH"),
+                        url = item.optString("url", fallbackUrl),
+                        inStock = item.optBoolean("in_stock", true)
+                    )
+                )
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
         }
-
-        return listOf(
-            PriceInfo(
-                pharmacyName = "Аптека Бажає Здоров'я",
-                price = (basePrice * 0.96).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Хрещатик, 15"
-            ),
-            PriceInfo(
-                pharmacyName = "АНЦ (Аптека Низьких Цін)",
-                price = (basePrice * 0.94).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "пр. Перемоги, 24"
-            ),
-            PriceInfo(
-                pharmacyName = "Аптека Подорожник",
-                price = (basePrice * 1.02).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Шевченка, 8"
-            ),
-            PriceInfo(
-                pharmacyName = "Аптека Доброго Дня",
-                price = (basePrice * 1.05).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "ТЦ Ocean Plaza"
-            ),
-            PriceInfo(
-                pharmacyName = "1 СОЦІАЛЬНА АПТЕКА",
-                price = (basePrice * 0.92).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Соборна, 42"
-            )
-        )
     }
-
-    private fun Double.round2(): Double = Math.round(this * 100.0) / 100.0
 }

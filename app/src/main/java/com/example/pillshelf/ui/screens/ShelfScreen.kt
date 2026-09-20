@@ -57,6 +57,7 @@ import com.example.pillshelf.R
 import com.example.pillshelf.data.model.Medication
 import com.example.pillshelf.ui.components.MedicationCard
 import com.example.pillshelf.ui.theme.StatusError
+import com.example.pillshelf.ui.theme.StatusSuccess
 import com.example.pillshelf.ui.theme.StatusWarning
 import com.example.pillshelf.ui.viewmodel.PillshelfViewModel
 
@@ -192,7 +193,7 @@ fun ShelfScreen(
                 }
             }
 
-            // Drug Interaction Warnings Banner (if any)
+            // Medication Hints Banner (кілька вбудованих правил — не повна перевірка)
             if (interactions.isNotEmpty()) {
                 item {
                     Column(
@@ -201,6 +202,18 @@ fun ShelfScreen(
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = "Підказки щодо ліків",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Автоматичні підказки на основі кількох вбудованих правил. " +
+                                "Це НЕ повна перевірка лікарських взаємодій.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         interactions.forEach { warning ->
                             Card(
                                 colors = CardDefaults.cardColors(
@@ -234,6 +247,67 @@ fun ShelfScreen(
                                         )
                                     }
                                 }
+                            }
+                        }
+                        Text(
+                            text = "Pillshelf — засіб обліку і не замінює лікаря чи фармацевта. " +
+                                "Перед змінами в ліках проконсультуйтеся з фахівцем.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Exact alarm permission status (нагадування залежать від нього)
+            item {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val exactAllowed = viewModel.isExactAlarmsAllowed()
+                val settingsIntent = viewModel.exactAlarmSettingsIntent()
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (exactAllowed) StatusSuccess.copy(alpha = 0.08f)
+                        else StatusWarning.copy(alpha = 0.12f)
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .testTag("exact_alarm_status_card")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Notifications,
+                            contentDescription = null,
+                            tint = if (exactAllowed) StatusSuccess else StatusWarning,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (exactAllowed) "Точні нагадування увімкнені"
+                                else "Точні нагадування вимкнені системою",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (exactAllowed) "Нагадування про дозу приходять вчасно"
+                                else "Дозвольте точні будильники, інакше нагадування можуть запізнюватися",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!exactAllowed && settingsIntent != null) {
+                            Button(onClick = {
+                                context.startActivity(settingsIntent)
+                            }) {
+                                Text("Дозволити")
                             }
                         }
                     }

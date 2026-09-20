@@ -18,8 +18,14 @@ interface IntakeHistoryDao {
     @Query("SELECT * FROM intake_history ORDER BY intake_time DESC")
     fun getAllHistory(): Flow<List<IntakeHistory>>
 
+    @Query("SELECT * FROM intake_history ORDER BY intake_time DESC")
+    fun getAllHistorySync(): List<IntakeHistory>
+
     @Query("SELECT * FROM intake_history WHERE intake_time BETWEEN :startTime AND :endTime ORDER BY intake_time DESC")
     fun getHistoryBetweenDates(startTime: Long, endTime: Long): Flow<List<IntakeHistory>>
+
+    @Query("SELECT * FROM intake_history WHERE medication_id = :medicationId AND intake_time BETWEEN :startTime AND :endTime ORDER BY intake_time DESC")
+    suspend fun getIntakesBetweenSync(medicationId: Long, startTime: Long, endTime: Long): List<IntakeHistory>
 
     @Query("DELETE FROM intake_history WHERE id = :id")
     suspend fun deleteById(id: Long)

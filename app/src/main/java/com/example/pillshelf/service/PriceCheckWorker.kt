@@ -11,6 +11,15 @@ import com.example.pillshelf.domain.model.PriceTrend
 import com.example.pillshelf.domain.usecase.AnalyzePriceTrendUseCase
 import java.time.LocalDate
 
+/**
+ * Періодична перевірка цін (12 год).
+ *
+ * Чесність даних: у БД зберігаються ТІЛЬКИ реально отримані ціни з API.
+ * Порожня відповідь API не створює записів і не показує «тренди».
+ *
+ * Моніторинг виконується лише якщо користувач увімкнув його в налаштуваннях
+ * (перемикач, за замовчуванням ВИМКНЕНИЙ) — див. SettingsRepository.
+ */
 class PriceCheckWorker(
     appContext: Context,
     workerParams: WorkerParameters
@@ -18,6 +27,11 @@ class PriceCheckWorker(
 
     override suspend fun doWork(): Result {
         return try {
+            // Моніторинг цін — опція, вимкнена за замовчуванням.
+            if (!SettingsRepository.isPriceMonitoringEnabled(applicationContext)) {
+                return Result.success()
+            }
+
             val database = PillshelfDatabase.getInstance(applicationContext)
             val priceAggregator = PriceAggregator()
             val medications = database.medicationDao().getMedicationsWithPriceTracking()
@@ -27,6 +41,11 @@ class PriceCheckWorker(
             for (medication in medications) {
                 try {
                     val currentPrices = priceAggregator.getAllPrices(medication.name)
+
+                    // API недоступний / порожній результат — нічого не пишемо
+                    // і нічого не сповіщаємо: немає даних = немає події.
+                    if (currentPrices.isEmpty()) continue
+
                     val historyEntries = currentPrices.map { p ->
                         PriceHistory(
                             medicationId = medication.id,
@@ -39,10 +58,9 @@ class PriceCheckWorker(
                             source = "Tabletki.ua"
                         )
                     }
-
                     database.priceHistoryDao().insertAll(historyEntries)
 
-                    // Analyze trend
+                    // Analyze trend — лише на реальних записах
                     val fullHistory = database.priceHistoryDao().getHistoryForMedicationSync(medication.id)
                     val result = trendAnalyzer.analyze(fullHistory)
 
@@ -59,7 +77,7 @@ class PriceCheckWorker(
                         NotificationHelper.showNotification(
                             applicationContext,
                             "Ціна знизилась!",
-                            "Ціна на ${medication.name} впала (${String.format("%.1f", result.percentageChange)}%). Найкраща ціна: ${minPrice} ₴",
+                            "Ціна на ${medication.name} впала (${String.format("%.1f", result.percentageChange)}%). Найкраща ціна: $minPrice ₴",
                             medication.id + 2000,
                             NotificationHelper.CHANNEL_PRICES
                         )
@@ -72,7 +90,7 @@ class PriceCheckWorker(
                             NotificationHelper.showNotification(
                                 applicationContext,
                                 "Цільова ціна досягнута!",
-                                "Ціна на ${medication.name} зараз ${bestPrice} ₴ (ваша мета: ${medication.targetPrice} ₴)",
+                                "Ціна на ${medication.name} зараз $bestPrice ₴ (ваша мета: ${medication.targetPrice} ₴)",
                                 medication.id + 3000,
                                 NotificationHelper.CHANNEL_PRICES
                             )

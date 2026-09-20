@@ -19,7 +19,7 @@ class CheckMedicationInteractionsUseCase {
         if (paracetamolMeds.size > 1) {
             warnings.add(
                 InteractionWarning(
-                    title = "Дублювання парацетамолу!",
+                    title = "Підказка: можливе дублювання парацетамолу",
                     description = "Кілька препаратів містять парацетамол (${paracetamolMeds.joinToString { it.name }}). Перевищення добової норми 4000 мг небезпечне для печінки.",
                     severity = InteractionWarning.Severity.HIGH,
                     conflictingMeds = paracetamolMeds.map { it.name }
@@ -39,7 +39,7 @@ class CheckMedicationInteractionsUseCase {
         if (nsaidMeds.size > 1) {
             warnings.add(
                 InteractionWarning(
-                    title = "Супутній прийом кількох НПЗП",
+                    title = "Підказка: кілька НПЗП одночасно",
                     description = "Одночасний прийом кількох протизапальних засобів (${nsaidMeds.joinToString { it.name }}) значно підвищує ризик подразнення шлунка та кровотеч.",
                     severity = InteractionWarning.Severity.HIGH,
                     conflictingMeds = nsaidMeds.map { it.name }
@@ -57,7 +57,7 @@ class CheckMedicationInteractionsUseCase {
         if (antibiotics.isNotEmpty()) {
             warnings.add(
                 InteractionWarning(
-                    title = "Правила прийому антибіотика",
+                    title = "Підказка: правила прийому антибіотика",
                     description = "Для препарату ${antibiotics.first().name}: приймайте за розкладом через рівні проміжки часу та завершіть повний призначений курс лікаря.",
                     severity = InteractionWarning.Severity.INFO,
                     conflictingMeds = antibiotics.map { it.name }

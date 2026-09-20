@@ -8,13 +8,25 @@ import java.time.format.DateTimeFormatter
 
 class CalculateNextIntakeUseCase {
 
+    companion object {
+        const val AS_NEEDED = "AS_NEEDED"
+    }
+
     /**
      * Calculates the next planned intake date and time for a medication.
      * Returns null if course is completed or no intake required.
+     *
+     * @param now точка відліку; параметр для детермінованих тестів,
+     *            у продакшені використовується поточний час.
      */
-    fun calculateNextIntake(medication: Medication, lastIntake: LocalDateTime? = null): LocalDateTime? {
-        val now = LocalDateTime.now()
-        val referenceTime = lastIntake ?: now
+    fun calculateNextIntake(
+        medication: Medication,
+        lastIntake: LocalDateTime? = null,
+        now: LocalDateTime = LocalDateTime.now()
+    ): LocalDateTime? {
+        // AS_NEEDED (за потреби) — не планується: прийом фіксується вручну,
+        // у журналі, без розкладу і без нагадувань.
+        if (medication.scheduleType.equals(AS_NEEDED, ignoreCase = true)) return null
 
         return when (medication.scheduleType) {
             "DAILY" -> calculateDailyIntake(medication, lastIntake, now)
@@ -32,6 +44,28 @@ class CalculateNextIntakeUseCase {
         }
     }
 
+    /**
+     * Скільки разів на день за розкладом має бути прийом (0 — не планується).
+     * Використовується для позначення прострочених доз у графіку на сьогодні.
+     */
+    fun dosesPerDay(medication: Medication): Int {
+        if (medication.scheduleType.equals(AS_NEEDED, ignoreCase = true)) return 0
+        return when (medication.scheduleType) {
+            "EVERY_N_HOURS" -> {
+                val interval = if (medication.intervalHours > 0) medication.intervalHours else 8
+                if (interval > 0) (24 / interval).coerceAtLeast(1) else 3
+            }
+            "COURSE" -> if (isCourseActive(medication, LocalDate.now())) medication.getTimeOfDayList().size else 0
+            "DAILY" -> medication.getTimeOfDayList().size
+            else -> medication.getTimeOfDayList().size
+        }
+    }
+
+    fun isCourseActive(medication: Medication, today: LocalDate): Boolean {
+        val startDate = parseCourseStart(medication)
+        return !today.isAfter(startDate.plusDays(medication.courseDurationDays.toLong()))
+    }
+
     private fun calculateDailyIntake(
         medication: Medication,
         lastIntake: LocalDateTime?,
@@ -44,8 +78,21 @@ class CalculateNextIntakeUseCase {
             return now.plusDays(1).withHour(8).withMinute(0).withSecond(0)
         }
 
+        // Якщо останній прийом був пізніше за час найближчого слота сьогодні —
+        // цей слот уже відпрацьований, наступний прийом завтра (для DAILY/COURSE).
+        val upcomingToday = targetTimes.filter { it.isAfter(now.toLocalTime()) }
+        if (lastIntake != null && lastIntake.toLocalDate() == now.toLocalDate()) {
+            val consumedSlot = targetTimes.lastOrNull { !lastIntake.toLocalTime().isBefore(it) }
+            if (consumedSlot != null) {
+                val remaining = upcomingToday.filter { it.isAfter(consumedSlot) }
+                if (remaining.isEmpty()) {
+                    return now.plusDays(1).with(targetTimes.first()).withSecond(0)
+                }
+            }
+        }
+
         // If today has upcoming times, return the next one today
-        val todayUpcoming = targetTimes.firstOrNull { it.isAfter(now.toLocalTime()) }
+        val todayUpcoming = upcomingToday.firstOrNull()
         if (todayUpcoming != null) {
             return now.with(todayUpcoming).withSecond(0)
         }
@@ -59,7 +106,17 @@ class CalculateNextIntakeUseCase {
         lastIntake: LocalDateTime?,
         now: LocalDateTime
     ): LocalDateTime? {
-        val startDate = if (medication.courseStartDate.isNotBlank()) {
+        val startDate = parseCourseStart(medication)
+        val courseEnd = startDate.plusDays(medication.courseDurationDays.toLong())
+        if (now.toLocalDate().isAfter(courseEnd)) {
+            return null // Course completed
+        }
+
+        return calculateDailyIntake(medication, lastIntake, now)
+    }
+
+    private fun parseCourseStart(medication: Medication): LocalDate {
+        return if (medication.courseStartDate.isNotBlank()) {
             try {
                 LocalDate.parse(medication.courseStartDate, DateTimeFormatter.ISO_LOCAL_DATE)
             } catch (e: Exception) {
@@ -68,13 +125,6 @@ class CalculateNextIntakeUseCase {
         } else {
             LocalDate.now()
         }
-
-        val courseEnd = startDate.plusDays(medication.courseDurationDays.toLong())
-        if (LocalDate.now().isAfter(courseEnd)) {
-            return null // Course completed
-        }
-
-        return calculateDailyIntake(medication, lastIntake, now)
     }
 
     fun slotToTime(slot: String): LocalTime {
