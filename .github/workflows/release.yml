@@ -15,6 +15,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ── 0. Перевірка наявності всіх секретів ─────────────────────────────────
+      # Fails FAST before wasting build minutes if any secret is missing.
+      # Це запобігає випадковому релізу з невірним або відсутнім підписом.
+      - name: Validate signing secrets
+        run: |
+          missing=()
+          [[ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]]   && missing+=("RELEASE_KEYSTORE_BASE64")
+          [[ -z "${{ secrets.RELEASE_STORE_PASSWORD }}" ]]    && missing+=("RELEASE_STORE_PASSWORD")
+          [[ -z "${{ secrets.RELEASE_KEY_ALIAS }}" ]]         && missing+=("RELEASE_KEY_ALIAS")
+          [[ -z "${{ secrets.RELEASE_KEY_PASSWORD }}" ]]      && missing+=("RELEASE_KEY_PASSWORD")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "❌ Missing required GitHub Secrets: ${missing[*]}"
+            echo "Add them at: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "✅ All signing secrets are present"
+
       # ── 1. Checkout ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,11 +48,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # ── 4. Decode keystore з Base64 секрету ──────────────────────────────────
-      - name: Decode release keystore
-        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/release.keystore"
+      # ── 4. Права виконання gradlew (Linux CI не зберігає chmod з git) ────────
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
-      # ── 5. Збирання та підпис release APK ───────────────────────────────────
+      # ── 5. Decode keystore з Base64 секрету ──────────────────────────────────
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/release.keystore"
+          # Перевіряємо що keystore валідний (не порожній файл)
+          keytool -list \
+            -keystore "${{ github.workspace }}/release.keystore" \
+            -storepass "${{ secrets.RELEASE_STORE_PASSWORD }}" \
+            -noprompt > /dev/null \
+            && echo "✅ Keystore is valid" \
+            || { echo "❌ Keystore is invalid or password is wrong"; exit 1; }
+
+      # ── 6. Збирання підписаного release APK ──────────────────────────────────
       - name: Build signed release APK
         run: ./gradlew assembleRelease --no-daemon
         env:
@@ -44,21 +73,48 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
-      # ── 6. Перейменування APK ────────────────────────────────────────────────
-      - name: Rename APK asset
+      # ── 7. Знаходимо APK динамічно (AGP може генерувати різні назви) ─────────
+      - name: Locate and rename APK
         run: |
+          # AGP може видати app-release.apk або app-release-unsigned.apk
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [[ -z "$APK_PATH" ]]; then
+            echo "❌ No APK found in app/build/outputs/apk/release/"
+            ls -la app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
           mkdir -p release
-          cp app/build/outputs/apk/release/app-release.apk release/Pillshelf-${{ github.ref_name }}.apk
+          cp "$APK_PATH" "release/Pillshelf-${{ github.ref_name }}.apk"
+          echo "APK_FINAL=release/Pillshelf-${{ github.ref_name }}.apk" >> $GITHUB_ENV
 
-      # ── 7. Upload artifact (доступний у Summary) ─────────────────────────────
+      # ── 8. Верифікація підпису APK ───────────────────────────────────────────
+      # Підтверджує що APK підписаний потрібним ключем, а не debug/unsigned.
+      # Якщо підпис відсутній або невірний — реліз не відбудеться.
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools | sort -V | tail -1)/apksigner"
+          echo "Using apksigner: $APKSIGNER"
+
+          # Перевірка валідності підпису
+          $APKSIGNER verify --verbose "${{ env.APK_FINAL }}" \
+            && echo "✅ APK signature is valid" \
+            || { echo "❌ APK signature verification FAILED"; exit 1; }
+
+          # Виводимо fingerprint щоб можна було звірити з keystore
+          echo ""
+          echo "=== APK Signer Certificate ==="
+          $APKSIGNER verify --print-certs "${{ env.APK_FINAL }}"
+
+      # ── 9. Upload artifact (доступний у Summary) ─────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: pillshelf-${{ github.ref_name }}-apk
-          path: release/Pillshelf-${{ github.ref_name }}.apk
+          path: ${{ env.APK_FINAL }}
           retention-days: 30
 
-      # ── 8. Публікація GitHub Release ─────────────────────────────────────────
+      # ── 10. Публікація GitHub Release ────────────────────────────────────────
       - name: Create GitHub Release and Upload APK
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -81,6 +137,6 @@ jobs:
 
             ### Встановлення / Installation:
             Завантажте файл `Pillshelf-${{ github.ref_name }}.apk` нижче та встановіть його на ваш Android-пристрій (Android 8.0+).
-          files: release/Pillshelf-${{ github.ref_name }}.apk
+          files: ${{ env.APK_FINAL }}
           draft: false
           prerelease: false

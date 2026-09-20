@@ -26,12 +26,21 @@ android {
             keyPassword = "android"
         }
         create("releaseConfig") {
-            val storeFilePath = System.getenv("RELEASE_STORE_FILE")
-            if (storeFilePath != null) {
-                storeFile = file(storeFilePath)
-                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
-                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
-                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            // Читаємо з env-змінних, які виставляє GitHub Actions.
+            // Якщо змінні відсутні — Gradle кине виключення одразу при конфігурації,
+            // не даючи зібрати реліз без правильного keystore.
+            val storeFilePath = requireNotNull(System.getenv("RELEASE_STORE_FILE")) {
+                "RELEASE_STORE_FILE env var is missing. Release builds require a keystore."
+            }
+            storeFile = file(storeFilePath)
+            storePassword = requireNotNull(System.getenv("RELEASE_STORE_PASSWORD")) {
+                "RELEASE_STORE_PASSWORD env var is missing."
+            }
+            keyAlias = requireNotNull(System.getenv("RELEASE_KEY_ALIAS")) {
+                "RELEASE_KEY_ALIAS env var is missing."
+            }
+            keyPassword = requireNotNull(System.getenv("RELEASE_KEY_PASSWORD")) {
+                "RELEASE_KEY_PASSWORD env var is missing."
             }
         }
     }
@@ -46,11 +55,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (System.getenv("RELEASE_STORE_FILE") != null) {
-                signingConfigs.getByName("releaseConfig")
-            } else {
-                signingConfigs.getByName("debugConfig")
-            }
+            // Release завжди підписується releaseConfig.
+            // Ніякого фоллбеку на debug — щоб не зламати оновлення на пристроях.
+            signingConfig = signingConfigs.getByName("releaseConfig")
         }
     }
     compileOptions {
