@@ -1,0 +1,6 @@
+{
+  "name": "Pillshelf",
+  "description": "Smart medicine cabinet and pill tracker to organize medications, monitor inventory, track schedules, and log daily doses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
