@@ -57,72 +57,19 @@ class TabletkiApiClient(
                 }
             }
         } catch (e: Exception) {
-            // Handled with graceful fallback below
+            // Log or handle network error
         }
 
-        // Offline / Fallback prices based on drug name benchmarks
-        generateBenchmarkPrices(drugName, webUrl)
+        // Return empty list when remote prices are unavailable — no synthetic/made-up prices
+        emptyList()
     }
 
-    private fun generateBenchmarkPrices(drugName: String, webUrl: String): List<PriceInfo> {
-        val lower = drugName.lowercase()
-        val basePrice = when {
-            lower.contains("парацетамол") || lower.contains("paracetamol") -> 32.50
-            lower.contains("ібупрофен") || lower.contains("ibuprofen") -> 74.00
-            lower.contains("вітамін d") || lower.contains("вітамін д") -> 185.00
-            lower.contains("панкреатин") -> 58.00
-            lower.contains("амоксицилін") -> 115.00
-            lower.contains("цитрамон") -> 28.00
-            lower.contains("омепразол") -> 62.00
-            lower.contains("валідол") -> 22.00
-            lower.contains("дротаверин") || lower.contains("но-шпа") -> 85.00
-            lower.contains("спрей") -> 120.00
-            else -> 65.00
+    fun getSearchWebUrl(drugName: String): String {
+        val encoded = try {
+            URLEncoder.encode(drugName.trim(), "UTF-8")
+        } catch (e: Exception) {
+            drugName.trim()
         }
-
-        return listOf(
-            PriceInfo(
-                pharmacyName = "Аптека Бажає Здоров'я",
-                price = (basePrice * 0.96).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Хрещатик, 15"
-            ),
-            PriceInfo(
-                pharmacyName = "АНЦ (Аптека Низьких Цін)",
-                price = (basePrice * 0.94).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "пр. Перемоги, 24"
-            ),
-            PriceInfo(
-                pharmacyName = "Аптека Подорожник",
-                price = (basePrice * 1.02).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Шевченка, 8"
-            ),
-            PriceInfo(
-                pharmacyName = "Аптека Доброго Дня",
-                price = (basePrice * 1.05).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "ТЦ Ocean Plaza"
-            ),
-            PriceInfo(
-                pharmacyName = "1 СОЦІАЛЬНА АПТЕКА",
-                price = (basePrice * 0.92).round2(),
-                currency = "UAH",
-                url = webUrl,
-                inStock = true,
-                address = "вул. Соборна, 42"
-            )
-        )
+        return "$SEARCH_WEB_URL$encoded"
     }
-
-    private fun Double.round2(): Double = Math.round(this * 100.0) / 100.0
 }

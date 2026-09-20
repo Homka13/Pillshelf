@@ -150,6 +150,20 @@ fun DoseScheduleCard(
                             )
                         }
                     }
+                    item.isOverdue -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StatusError.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Прострочено",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusError
+                            )
+                        }
+                    }
                     item.medication.isOutOfStock() -> {
                         Surface(
                             shape = RoundedCornerShape(8.dp),

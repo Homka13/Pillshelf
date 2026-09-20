@@ -350,13 +350,19 @@ fun AddEditMedicationSheet(
                 FilterChip(
                     selected = scheduleType == "EVERY_N_HOURS",
                     onClick = { scheduleType = "EVERY_N_HOURS" },
-                    label = { Text("Інтервально") },
+                    label = { Text("Інтервал") },
                     modifier = Modifier.weight(1f)
                 )
                 FilterChip(
                     selected = scheduleType == "COURSE",
                     onClick = { scheduleType = "COURSE" },
-                    label = { Text("Курс лікування") },
+                    label = { Text("Курс") },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = scheduleType == "AS_NEEDED",
+                    onClick = { scheduleType = "AS_NEEDED" },
+                    label = { Text("За потребою") },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -364,6 +370,20 @@ fun AddEditMedicationSheet(
             Spacer(modifier = Modifier.height(10.dp))
 
             when (scheduleType) {
+                "AS_NEEDED" -> {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Ліки за потребою (PRN). Приймаються лише за потреби (наприклад, при болю чи температурі). Без фіксованих будильників.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
                 "DAILY" -> {
                     Text(
                         text = "Час прийому протягом дня:",
@@ -481,13 +501,13 @@ fun AddEditMedicationSheet(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "Відстежувати ціни в аптеках",
+                                text = "Відстежувати ціни в аптеках (Tabletki.ua)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Моніторинг через Tabletki.ua та мережі аптек України",
+                                text = "Вимкнено за замовчуванням. Якщо увімкнено, запит виконується лише за вашою вимогою.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

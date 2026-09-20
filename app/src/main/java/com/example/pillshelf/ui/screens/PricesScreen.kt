@@ -134,7 +134,7 @@ fun PricesScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Додаток автоматично перевіряє ціни в АНЦ, Бажаємо Здоров'я, Подорож та 9-1-1 і сповіщає про вигідні знижки.",
+                        text = "Перевірка цін та наявності в аптеках України через Tabletki.ua. Без фонового витоку даних — пошук відкривається на офіційному сайті.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -295,10 +295,10 @@ private fun TrackedMedicationCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = if (item.bestPrice > 0) "${item.bestPrice} ₴" else "Очікується",
+                                text = if (item.bestPrice > 0) "${item.bestPrice} ₴" else "Онлайн дані відсутні",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = if (item.bestPrice > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

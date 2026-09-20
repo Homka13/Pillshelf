@@ -192,19 +192,25 @@ fun ShelfScreen(
                 }
             }
 
-            // Drug Interaction Warnings Banner (if any)
-            if (interactions.isNotEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+            // Medical Disclaimer & Compatibility Hints Banner
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (interactions.isNotEmpty()) {
+                        Text(
+                            text = "Підказки щодо сумісності ліків",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                         interactions.forEach { warning ->
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = StatusError.copy(alpha = 0.1f)
+                                    containerColor = StatusWarning.copy(alpha = 0.12f)
                                 ),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -216,7 +222,7 @@ fun ShelfScreen(
                                     Icon(
                                         Icons.Default.Warning,
                                         contentDescription = null,
-                                        tint = StatusError,
+                                        tint = StatusWarning,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
@@ -225,16 +231,43 @@ fun ShelfScreen(
                                             text = warning.title,
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = StatusError
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
                                             text = warning.description,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // Always-present Medical Disclaimer
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Outlined.Medication,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Медичне застереження: Pillshelf не є діагностичним інструментом і не замінює професійну медичну консультацію. Підказки мають виключно довідковий характер. Завжди консультуйтесь з лікарем або фармацевтом.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

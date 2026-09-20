@@ -34,6 +34,12 @@ abstract class PillshelfDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: PillshelfDatabase? = null
 
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Non-destructive migration ensuring data preservation
+            }
+        }
+
         fun getInstance(context: Context): PillshelfDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -42,7 +48,7 @@ abstract class PillshelfDatabase : RoomDatabase() {
                     "pillshelf_database"
                 )
                     .addCallback(DatabaseCallback(context.applicationContext))
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2)
                     .build()
                 INSTANCE = instance
                 instance
@@ -192,28 +198,7 @@ abstract class PillshelfDatabase : RoomDatabase() {
                 )
             )
 
-            // 3. Seed Price History for Price Tracking & Trend Analysis
-            val priceHistoryList = listOf(
-                // Paracetamol history
-                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Бажає Здоров'я", price = 32.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
-                PriceHistory(medicationId = med1Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 31.90, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
-                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Подорожник", price = 34.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
-                PriceHistory(medicationId = med1Id, pharmacyName = "Аптека Бажає Здоров'я", price = 28.50, date = today.minusDays(25).toString(), dateEpochDays = todayEpochDay - 25, url = "https://tabletki.ua/uk/search/?q=Парацетамол"),
-
-                // Ibuprofen history
-                PriceHistory(medicationId = med2Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 69.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
-                PriceHistory(medicationId = med2Id, pharmacyName = "Аптека Бажає Здоров'я", price = 73.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
-                PriceHistory(medicationId = med2Id, pharmacyName = "1 СОЦІАЛЬНА АПТЕКА", price = 68.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
-                PriceHistory(medicationId = med2Id, pharmacyName = "Аптека Бажає Здоров'я", price = 82.00, date = today.minusDays(20).toString(), dateEpochDays = todayEpochDay - 20, url = "https://tabletki.ua/uk/search/?q=Ібупрофен"),
-
-                // Vitamin D3 history
-                PriceHistory(medicationId = med3Id, pharmacyName = "Аптека Бажає Здоров'я", price = 188.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим"),
-                PriceHistory(medicationId = med3Id, pharmacyName = "АНЦ (Аптека Низьких Цін)", price = 184.50, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим"),
-                PriceHistory(medicationId = med3Id, pharmacyName = "Аптека Доброго Дня", price = 199.00, date = today.toString(), dateEpochDays = todayEpochDay, url = "https://tabletki.ua/uk/search/?q=Олідетрим")
-            )
-            priceDao.insertAll(priceHistoryList)
-
-            // 4. Seed initial Intake history
+            // 3. Seed initial Intake history (no fabricated pharmacy prices)
             val intakes = listOf(
                 IntakeHistory(
                     medicationId = med1Id,

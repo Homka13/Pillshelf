@@ -18,7 +18,8 @@ enum class PriceTrend(val titleUk: String) {
 enum class ScheduleTypeEnum(val id: String, val titleUk: String) {
     DAILY("DAILY", "Щодня"),
     EVERY_N_HOURS("EVERY_N_HOURS", "Кожні N годин"),
-    COURSE("COURSE", "Курс прийому")
+    COURSE("COURSE", "Курс прийому"),
+    AS_NEEDED("AS_NEEDED", "За потребою")
 }
 
 data class InteractionWarning(

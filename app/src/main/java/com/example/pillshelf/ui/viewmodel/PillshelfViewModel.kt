@@ -39,6 +39,7 @@ data class ScheduledDoseItem(
     val timeSlotLabel: String, // "Ранок (08:00)", "День (13:00)", "Вечір (20:00)", "Інтервал (кожні N год)"
     val isTaken: Boolean = false,
     val isSkipped: Boolean = false,
+    val isOverdue: Boolean = false,
     val historyId: Long? = null,
     val loggedTimestamp: Long? = null
 )
@@ -183,18 +184,22 @@ class PillshelfViewModel(
 
         val todayIntakes = history.filter { it.intakeTime in startOfTodayMillis until endOfTodayMillis }
         val items = mutableListOf<ScheduledDoseItem>()
+        val currentTime = java.time.LocalTime.now()
 
         for (med in meds) {
-            when (med.scheduleType) {
+            when (med.scheduleType.uppercase()) {
+                "AS_NEEDED" -> {
+                    // As-needed (PRN) medications do not produce strict scheduled daily alarms
+                }
                 "DAILY" -> {
                     val timeSlots = med.getTimeOfDayList()
                     for (slot in timeSlots) {
-                        val timeStr = when (slot.uppercase()) {
-                            "MORNING" -> "08:00"
-                            "AFTERNOON" -> "13:00"
-                            "EVENING" -> "20:00"
-                            "BEDTIME" -> "22:00"
-                            else -> "08:00"
+                        val (timeStr, slotTime) = when (slot.uppercase()) {
+                            "MORNING" -> Pair("08:00", java.time.LocalTime.of(8, 0))
+                            "AFTERNOON" -> Pair("13:00", java.time.LocalTime.of(13, 0))
+                            "EVENING" -> Pair("20:00", java.time.LocalTime.of(20, 0))
+                            "BEDTIME" -> Pair("22:00", java.time.LocalTime.of(22, 0))
+                            else -> Pair("08:00", java.time.LocalTime.of(8, 0))
                         }
                         val slotLabel = when (slot.uppercase()) {
                             "MORNING" -> "Ранок (08:00)"
@@ -210,13 +215,18 @@ class PillshelfViewModel(
                             (it.notes.contains(slot, ignoreCase = true) || it.notes.contains(timeStr) || todayIntakes.size == 1)
                         }
 
+                        val isTaken = match?.taken == true
+                        val isSkipped = match?.taken == false
+                        val isOverdue = !isTaken && !isSkipped && currentTime.isAfter(slotTime)
+
                         items.add(
                             ScheduledDoseItem(
                                 medication = med,
                                 scheduledTime = timeStr,
                                 timeSlotLabel = slotLabel,
-                                isTaken = match?.taken == true,
-                                isSkipped = match?.taken == false,
+                                isTaken = isTaken,
+                                isSkipped = isSkipped,
+                                isOverdue = isOverdue,
                                 historyId = match?.id,
                                 loggedTimestamp = match?.actualTime
                             )
@@ -227,42 +237,65 @@ class PillshelfViewModel(
                     val interval = if (medicationIntervalHours(med) > 0) medicationIntervalHours(med) else 8
                     val slotLabel = "Кожні $interval год."
                     val match = todayIntakes.firstOrNull { it.medicationId == med.id }
+                    val isTaken = match?.taken == true
+                    val isSkipped = match?.taken == false
+                    val isOverdue = !isTaken && !isSkipped && currentTime.isAfter(java.time.LocalTime.of(14, 0))
 
                     items.add(
                         ScheduledDoseItem(
                             medication = med,
                             scheduledTime = "Кожні ${interval}г",
                             timeSlotLabel = slotLabel,
-                            isTaken = match?.taken == true,
-                            isSkipped = match?.taken == false,
+                            isTaken = isTaken,
+                            isSkipped = isSkipped,
+                            isOverdue = isOverdue,
                             historyId = match?.id,
                             loggedTimestamp = match?.actualTime
                         )
                     )
                 }
                 "COURSE" -> {
-                    val match = todayIntakes.firstOrNull { it.medicationId == med.id }
-                    items.add(
-                        ScheduledDoseItem(
-                            medication = med,
-                            scheduledTime = "08:00, 20:00",
-                            timeSlotLabel = "Курс лікування (${med.courseDurationDays} дн.)",
-                            isTaken = match?.taken == true,
-                            isSkipped = match?.taken == false,
-                            historyId = match?.id,
-                            loggedTimestamp = match?.actualTime
+                    // Check if course has not ended
+                    val startDate = try {
+                        if (med.courseStartDate.isNotBlank()) LocalDate.parse(med.courseStartDate) else LocalDate.now()
+                    } catch (e: Exception) {
+                        LocalDate.now()
+                    }
+                    val courseEnd = startDate.plusDays(med.courseDurationDays.toLong())
+                    if (!LocalDate.now().isAfter(courseEnd)) {
+                        val match = todayIntakes.firstOrNull { it.medicationId == med.id }
+                        val isTaken = match?.taken == true
+                        val isSkipped = match?.taken == false
+                        val isOverdue = !isTaken && !isSkipped && currentTime.isAfter(java.time.LocalTime.of(12, 0))
+
+                        items.add(
+                            ScheduledDoseItem(
+                                medication = med,
+                                scheduledTime = "08:00, 20:00",
+                                timeSlotLabel = "Курс лікування (${med.courseDurationDays} дн.)",
+                                isTaken = isTaken,
+                                isSkipped = isSkipped,
+                                isOverdue = isOverdue,
+                                historyId = match?.id,
+                                loggedTimestamp = match?.actualTime
+                            )
                         )
-                    )
+                    }
                 }
                 else -> {
                     val match = todayIntakes.firstOrNull { it.medicationId == med.id }
+                    val isTaken = match?.taken == true
+                    val isSkipped = match?.taken == false
+                    val isOverdue = !isTaken && !isSkipped && currentTime.isAfter(java.time.LocalTime.of(12, 0))
+
                     items.add(
                         ScheduledDoseItem(
                             medication = med,
                             scheduledTime = "08:00",
                             timeSlotLabel = "За розкладом",
-                            isTaken = match?.taken == true,
-                            isSkipped = match?.taken == false,
+                            isTaken = isTaken,
+                            isSkipped = isSkipped,
+                            isOverdue = isOverdue,
                             historyId = match?.id,
                             loggedTimestamp = match?.actualTime
                         )
@@ -359,8 +392,12 @@ class PillshelfViewModel(
                 updatedAt = System.currentTimeMillis()
             )
             val newId = medicationRepository.insertMedication(prepared)
+            val savedMed = prepared.copy(id = newId)
 
-            // If price tracking is enabled, immediately fetch initial prices
+            // Schedule exact alarm for the newly added medication
+            com.example.pillshelf.service.ReminderScheduler.scheduleMedication(getApplication(), savedMed)
+
+            // If price tracking is explicitly enabled by user, fetch initial prices
             if (prepared.trackPrices) {
                 try {
                     priceRepository.fetchAndStorePrices(newId, prepared.name)
@@ -373,12 +410,15 @@ class PillshelfViewModel(
 
     fun updateMedication(medication: Medication) {
         viewModelScope.launch(Dispatchers.IO) {
-            medicationRepository.updateMedication(medication.copy(updatedAt = System.currentTimeMillis()))
+            val updated = medication.copy(updatedAt = System.currentTimeMillis())
+            medicationRepository.updateMedication(updated)
+            com.example.pillshelf.service.ReminderScheduler.scheduleMedication(getApplication(), updated)
         }
     }
 
     fun deleteMedication(medication: Medication) {
         viewModelScope.launch(Dispatchers.IO) {
+            com.example.pillshelf.service.ReminderScheduler.cancelAlarm(getApplication(), medication.id)
             medicationRepository.deleteMedication(medication)
         }
     }
@@ -389,6 +429,13 @@ class PillshelfViewModel(
                 medication = medication,
                 taken = taken,
                 notes = if (slotNotes.isNotBlank()) slotNotes else if (taken) "Прийнято" else "Пропущено"
+            )
+
+            // Reschedule alarm for next planned intake
+            com.example.pillshelf.service.ReminderScheduler.scheduleMedication(
+                getApplication(),
+                medication,
+                java.time.LocalDateTime.now()
             )
 
             // If stock reaches low threshold, show notification per AC-3
@@ -421,6 +468,9 @@ class PillshelfViewModel(
     fun restockMedication(medication: Medication, addedAmount: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             medicationRepository.incrementRemainingQuantity(medication.id, addedAmount)
+            // If was out of stock, reschedule alarms
+            val restocked = medication.copy(remainingQuantity = medication.remainingQuantity + addedAmount)
+            com.example.pillshelf.service.ReminderScheduler.scheduleMedication(getApplication(), restocked)
         }
     }
 

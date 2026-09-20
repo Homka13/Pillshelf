@@ -17,7 +17,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.aistudio.pillshelf.shlfkb"
+        applicationId = "com.yukhym.pillshelf"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -94,6 +94,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
+    testImplementation(libs.junit)
     debugImplementation(libs.androidx.ui.tooling)
 }
 
