@@ -18,19 +18,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.Medication
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -49,6 +44,7 @@ import com.example.pillshelf.ui.theme.StatusSuccess
 import com.example.pillshelf.ui.viewmodel.PillshelfViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun ScheduleScreen(
@@ -58,199 +54,161 @@ fun ScheduleScreen(
 ) {
     val scheduledDoses by viewModel.scheduledDoses.collectAsStateWithLifecycle()
     val adherence by viewModel.adherenceSummary.collectAsStateWithLifecycle()
-    val selectedEpochDay by viewModel.selectedDateEpochDay.collectAsStateWithLifecycle()
-    val todayEpoch = viewModel.currentEpochDay
 
-    val selectedDate = LocalDate.ofEpochDay(selectedEpochDay)
-    val isToday = selectedEpochDay == todayEpoch
-
-    val dateFormatter = DateTimeFormatter.ofPattern("EEEE, MMM d")
+    val today = LocalDate.now()
+    val formattedDate = today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("uk")))
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .testTag("schedule_list"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp)
+            .testTag("schedule_screen"),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Date Selector Header
+        // Top Header
         item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { viewModel.setSelectedDate(selectedEpochDay - 1) },
-                        modifier = Modifier.testTag("prev_day_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Previous Day"
-                        )
-                    }
-
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = if (isToday) "Today" else selectedDate.format(DateTimeFormatter.ofPattern("MMM d")),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = selectedDate.format(dateFormatter),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { viewModel.setSelectedDate(selectedEpochDay + 1) },
-                        modifier = Modifier.testTag("next_day_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Next Day"
-                        )
-                    }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Графік прийому ліків",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Event,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = formattedDate.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
 
-        // Adherence Summary Card
+        // Daily Adherence Card
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp)
+                    .clip(RoundedCornerShape(20.dp))
                     .testTag("adherence_summary_card"),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                )
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(18.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        Column {
                             Text(
-                                text = "Daily Adherence",
+                                text = "Сьогоднішній прогрес",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${adherence.takenCount} з ${adherence.totalScheduled} прийомів виконано",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
-                        Text(
-                            text = "${adherence.percentage}%",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.ExtraBold,
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.primary
-                        )
+                        ) {
+                            Text(
+                                text = "${adherence.percentage}%",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    val progress = if (adherence.totalScheduled > 0) {
+                        adherence.takenCount.toFloat() / adherence.totalScheduled.toFloat()
+                    } else 0f
 
                     LinearProgressIndicator(
-                        progress = { adherence.percentage / 100f },
+                        progress = { progress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = MaterialTheme.colorScheme.primary,
+                            .clip(CircleShape),
+                        color = StatusSuccess,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = if (adherence.totalScheduled > 0) {
-                            "${adherence.takenCount} of ${adherence.totalScheduled} doses logged"
-                        } else {
-                            "No recurring doses scheduled for this day"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
 
-        // Section Title
-        item {
-            Text(
-                text = "Today's Medication Routine",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-        }
-
-        // List of Scheduled Doses
+        // Scheduled Items List
         if (scheduledDoses.isEmpty()) {
             item {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(top = 48.dp, bottom = 48.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        modifier = Modifier.size(56.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "No scheduled doses",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Add medications with daily schedules to track adherence.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onAddMedicationClick) {
-                        Text("Add Medication")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Medication,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Text(
+                            text = "На сьогодні прийомів не заплановано",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = onAddMedicationClick) {
+                            Text("Додати ліки з графіком")
+                        }
                     }
                 }
             }
         } else {
             items(
                 items = scheduledDoses,
-                key = { "${it.medication.id}_${it.scheduledTime}_${it.logId ?: 0}" }
+                key = { "${it.medication.id}_${it.scheduledTime}_${it.timeSlotLabel}" }
             ) { item ->
                 DoseScheduleCard(
                     item = item,
-                    onMarkTaken = { viewModel.markDoseTaken(item) },
-                    onMarkSkipped = { viewModel.markDoseSkipped(item) },
-                    onUndo = {
-                        item.logId?.let { id -> viewModel.undoLog(id) }
+                    onMarkTaken = {
+                        viewModel.recordIntake(item.medication, taken = true, slotNotes = item.timeSlotLabel)
                     },
-                    modifier = Modifier.padding(vertical = 6.dp)
+                    onMarkSkipped = {
+                        viewModel.recordIntake(item.medication, taken = false, slotNotes = item.timeSlotLabel)
+                    },
+                    onUndo = {
+                        item.historyId?.let { viewModel.undoIntake(it) }
+                    }
                 )
             }
         }

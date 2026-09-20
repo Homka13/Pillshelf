@@ -38,223 +38,255 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.pillshelf.data.model.DoseLog
-import com.example.pillshelf.data.model.DoseStatus
+import com.example.pillshelf.data.model.IntakeHistory
 import com.example.pillshelf.ui.theme.StatusSuccess
 import com.example.pillshelf.ui.viewmodel.PillshelfViewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun HistoryScreen(
     viewModel: PillshelfViewModel,
     modifier: Modifier = Modifier
 ) {
-    val logs by viewModel.allLogs.collectAsStateWithLifecycle()
+    val history by viewModel.allHistory.collectAsStateWithLifecycle()
 
-    val totalLogs = logs.size
-    val takenCount = logs.count { it.status == DoseStatus.TAKEN }
-    val skippedCount = logs.count { it.status == DoseStatus.SKIPPED }
-    val overallAdherence = if (totalLogs > 0) ((takenCount.toFloat() / totalLogs.toFloat()) * 100).toInt() else 100
+    val totalCount = history.size
+    val takenCount = history.count { it.taken }
+    val skippedCount = history.count { !it.taken }
+    val overallAdherence = if (totalCount > 0) ((takenCount.toFloat() / totalCount.toFloat()) * 100).toInt() else 100
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .testTag("history_list"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp)
+            .testTag("history_screen"),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 96.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Header
+        item {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Журнал прийомів",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Історія виконаних та пропущених прийомів ліків",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         // Summary Card
         item {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(RoundedCornerShape(18.dp)),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Medication Log Overview",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        HistoryStatItem(
-                            count = "$takenCount",
-                            label = "Taken",
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$overallAdherence%",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
                             color = StatusSuccess
                         )
-                        HistoryStatItem(
-                            count = "$skippedCount",
-                            label = "Skipped",
+                        Text(
+                            text = "Дотримання",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        HistoryStatItem(
-                            count = "$overallAdherence%",
-                            label = "Adherence",
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$takenCount",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Прийнято",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$skippedCount",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = "Пропущено",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
         }
 
-        // Section Title
-        item {
-            Text(
-                text = "Activity Log (${logs.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        }
-
-        if (logs.isEmpty()) {
+        if (history.isEmpty()) {
             item {
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(top = 48.dp, bottom = 48.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.History,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        modifier = Modifier.size(56.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "No history recorded yet",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "When you take or skip medications, activity logs will appear here.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.History,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(52.dp)
+                        )
+                        Text(
+                            text = "Журнал прийомів порожній",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Відмічені в графіку прийоми з'являтимуться тут",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
             }
         } else {
             items(
-                items = logs,
+                items = history,
                 key = { it.id }
-            ) { log ->
+            ) { item ->
                 HistoryItemCard(
-                    log = log,
-                    onUndo = { viewModel.undoLog(log.id) },
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    item = item,
+                    onUndo = { viewModel.undoIntake(item.id) }
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun HistoryStatItem(
-    count: String,
-    label: String,
-    color: androidx.compose.ui.graphics.Color
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = count,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
 @Composable
 private fun HistoryItemCard(
-    log: DoseLog,
+    item: IntakeHistory,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isTaken = log.status == DoseStatus.TAKEN
-    val statusColor = if (isTaken) StatusSuccess else MaterialTheme.colorScheme.onSurfaceVariant
-    val formattedTime = Instant.ofEpochMilli(log.timestamp)
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
+    val dateTimeFormatter = DateTimeFormatter.ofPattern("dd MMM, HH:mm", Locale("uk"))
+    val formattedTime = dateTimeFormatter.format(
+        Instant.ofEpochMilli(item.intakeTime).atZone(ZoneId.systemDefault())
+    )
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("history_item_${log.id}"),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .clip(RoundedCornerShape(16.dp))
+            .testTag("history_item_${item.id}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(statusColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = if (isTaken) Icons.Default.Check else Icons.Default.Close,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = log.medicationName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "${if (isTaken) "Taken" else "Skipped"} • ${log.dosageTaken} • $formattedTime",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (log.notes.isNotBlank()) {
-                    Text(
-                        text = "Note: ${log.notes}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (item.taken) StatusSuccess.copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (item.taken) Icons.Default.Check else Icons.Default.Close,
+                        contentDescription = null,
+                        tint = if (item.taken) StatusSuccess else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(18.dp)
                     )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = item.medicationName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = formattedTime,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (item.dosageForm.isNotBlank()) {
+                            Text(
+                                text = "• ${item.dosageForm}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (item.notes.isNotBlank()) {
+                        Text(
+                            text = item.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             IconButton(
                 onClick = onUndo,
-                modifier = Modifier.testTag("history_undo_${log.id}")
+                modifier = Modifier.testTag("undo_history_button_${item.id}")
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Undo,
-                    contentDescription = "Undo log",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    Icons.Outlined.Undo,
+                    contentDescription = "Скасувати запис",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

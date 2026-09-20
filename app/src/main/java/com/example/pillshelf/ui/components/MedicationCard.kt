@@ -20,8 +20,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,7 +47,6 @@ import com.example.pillshelf.data.model.Medication
 import com.example.pillshelf.ui.theme.StatusError
 import com.example.pillshelf.ui.theme.StatusSuccess
 import com.example.pillshelf.ui.theme.StatusWarning
-import java.time.LocalDate
 
 @Composable
 fun MedicationCard(
@@ -61,13 +60,25 @@ fun MedicationCard(
     val isExpired = medication.isExpired(currentEpochDay)
     val isExpiringSoon = medication.isExpiringSoon(currentEpochDay)
     val isLowStock = medication.isLowStock()
+    val isOutOfStock = medication.isOutOfStock()
+
+    val stockRatio = if (medication.totalQuantity > 0) {
+        (medication.remainingQuantity.toFloat() / medication.totalQuantity.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val stockStatusColor = when {
+        isOutOfStock -> StatusError
+        isLowStock -> StatusWarning
+        else -> StatusSuccess
+    }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("med_card_${medication.id}")
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .testTag("medication_card_${medication.id}"),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -78,22 +89,95 @@ fun MedicationCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Header Row: Form Icon + Name & Brand + Category Tag
+            // Top Row: Category & Status Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Color badge with medicine icon
+                // Category Chip
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(medication.colorHex).copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = medication.category,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(medication.colorHex)
+                    )
+                }
+
+                // Expiry Badge
+                when {
+                    isExpired -> {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StatusError.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = StatusError,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "Прострочено",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StatusError
+                                )
+                            }
+                        }
+                    }
+                    isExpiringSoon -> {
+                        val daysLeft = medication.daysUntilExpiry(currentEpochDay)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = StatusWarning.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Спливає через $daysLeft дн.",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = StatusWarning
+                            )
+                        }
+                    }
+                    medication.expiryDate.isNotBlank() -> {
+                        Text(
+                            text = "До: ${medication.expiryDate}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Medicine Main Title & Active Substance
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(medication.colorHex).copy(alpha = 0.18f)),
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(medication.colorHex).copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Medication,
-                        contentDescription = medication.form.displayName,
+                        contentDescription = null,
                         tint = Color(medication.colorHex),
                         modifier = Modifier.size(24.dp)
                     )
@@ -102,240 +186,187 @@ fun MedicationCard(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = medication.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (medication.strength.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = medication.strength,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                    Text(
+                        text = medication.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    val subtitle = when {
+                        medication.activeSubstance.isNotBlank() && medication.dosageForm.isNotBlank() ->
+                            "${medication.activeSubstance} • ${medication.dosageForm}"
+                        medication.dosageForm.isNotBlank() -> medication.dosageForm
+                        else -> medication.activeSubstance
                     }
 
-                    if (medication.brandOrGeneric.isNotBlank()) {
+                    if (subtitle.isNotBlank()) {
                         Text(
-                            text = medication.brandOrGeneric,
+                            text = subtitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                }
 
-                // Category pill
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text(
-                        text = medication.category.displayName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        maxLines = 1
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Info Badges: Stock and Expiry
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Stock Badge
-                val stockBg = when {
-                    medication.stockQuantity == 0 -> StatusError.copy(alpha = 0.12f)
-                    isLowStock -> StatusWarning.copy(alpha = 0.15f)
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-                val stockTextColor = when {
-                    medication.stockQuantity == 0 -> StatusError
-                    isLowStock -> StatusWarning
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = stockBg,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isLowStock) Icons.Default.Warning else Icons.Outlined.Inventory2,
-                            contentDescription = null,
-                            tint = stockTextColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
+                    if (medication.manufacturer.isNotBlank()) {
                         Text(
-                            text = if (medication.stockQuantity == 0) "Out of stock"
-                            else "${medication.stockQuantity} ${medication.unit} left",
+                            text = medication.manufacturer,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (isLowStock) FontWeight.Bold else FontWeight.Medium,
-                            color = stockTextColor,
-                            maxLines = 1
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                }
-
-                // Expiry Badge
-                if (medication.expiryDateEpochDays > 0) {
-                    val daysLeft = medication.daysUntilExpiry(currentEpochDay)
-                    val expiryBg = when {
-                        isExpired -> StatusError.copy(alpha = 0.12f)
-                        isExpiringSoon -> StatusWarning.copy(alpha = 0.15f)
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    val expiryColor = when {
-                        isExpired -> StatusError
-                        isExpiringSoon -> StatusWarning
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    val expiryText = when {
-                        isExpired -> "Expired"
-                        daysLeft == 0L -> "Expires today"
-                        daysLeft == 1L -> "Expires tomorrow"
-                        daysLeft < 30 -> "Expires in $daysLeft d"
-                        else -> {
-                            val expiryDate = LocalDate.ofEpochDay(medication.expiryDateEpochDays)
-                            "Exp: ${expiryDate.month.name.take(3)} ${expiryDate.year}"
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = expiryBg
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isExpired || isExpiringSoon) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = expiryColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
-                            Text(
-                                text = expiryText,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (isExpired || isExpiringSoon) FontWeight.Bold else FontWeight.Normal,
-                                color = expiryColor,
-                                maxLines = 1
-                            )
-                        }
                     }
                 }
             }
 
-            // Location or instructions snippet if present
-            if (medication.storageLocation.isNotBlank() || medication.instructions.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Stock Inventory Progress Section
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.LocationOn,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = medication.storageLocation,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (medication.scheduledTimes.isNotBlank()) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Outlined.Schedule,
+                            Icons.Outlined.Inventory2,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            tint = stockStatusColor,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = medication.scheduledTimes,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            text = when {
+                                isOutOfStock -> "Закінчилося"
+                                isLowStock -> "Закінчується: ${medication.remainingQuantity} шт."
+                                else -> "Залишок: ${medication.remainingQuantity} з ${medication.totalQuantity} шт."
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = stockStatusColor
                         )
                     }
+
+                    if (medication.trackPrices) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.PriceChange,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Ціни відстежуються",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                LinearProgressIndicator(
+                    progress = { stockRatio },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(CircleShape),
+                    color = stockStatusColor,
+                    trackColor = stockStatusColor.copy(alpha = 0.2f)
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Action Buttons: "Take 1 dose" and "Restock"
+            // Schedule info tag
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = when (medication.scheduleType) {
+                            "DAILY" -> "Щодня (${medication.timeOfDay})"
+                            "EVERY_N_HOURS" -> "Кожні ${medication.intervalHours} год."
+                            "COURSE" -> "Курс ${medication.courseDurationDays} дн."
+                            else -> "За потребою"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                if (medication.takeBeforeMeal) {
+                    Text(
+                        text = "До їжі",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
                     onClick = onRestock,
                     modifier = Modifier
-                        .height(36.dp)
-                        .testTag("restock_btn_${medication.id}"),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(8.dp)
+                        .weight(1f)
+                        .testTag("restock_button_${medication.id}"),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = ButtonDefaults.ContentPadding
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        Icons.Default.Add,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Restock", style = MaterialTheme.typography.labelMedium)
+                    Text(text = "Поповнити", fontSize = 13.sp)
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
 
                 FilledTonalButton(
                     onClick = onTakeDose,
-                    enabled = medication.stockQuantity > 0,
+                    enabled = !isOutOfStock,
                     modifier = Modifier
-                        .height(36.dp)
-                        .testTag("take_dose_btn_${medication.id}"),
+                        .weight(1f)
+                        .testTag("take_dose_button_${medication.id}"),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    )
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.CheckCircle,
+                        Icons.Default.Check,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Take 1", style = MaterialTheme.typography.labelMedium)
+                    Text(text = "Прийняти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

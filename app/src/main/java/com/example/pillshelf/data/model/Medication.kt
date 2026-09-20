@@ -1,74 +1,118 @@
 package com.example.pillshelf.data.model
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
-enum class MedicationForm(val displayName: String, val defaultUnit: String) {
-    TABLET("Tablet", "tablets"),
-    CAPSULE("Capsule", "capsules"),
-    LIQUID("Liquid / Syrup", "ml"),
-    DROPS("Eye/Ear Drops", "drops"),
-    INHALER("Inhaler", "puffs"),
-    SPRAY("Nasal Spray", "sprays"),
-    TOPICAL("Cream / Ointment", "applications"),
-    INJECTION("Injection", "units"),
-    OTHER("Other", "doses")
-}
-
-enum class MedicationCategory(val displayName: String) {
-    ALL("All"),
-    PAIN_RELIEF("Pain Relief"),
-    DAILY_SUPPLEMENT("Supplements & Vitamins"),
-    ALLERGY_SINUS("Allergy & Sinus"),
-    PRESCRIPTION("Prescription"),
-    COLD_FLU("Cold & Flu"),
-    DIGESTIVE("Digestive Health"),
-    FIRST_AID("First Aid"),
-    OTHER("Other")
-}
-
-enum class ScheduleType(val displayName: String) {
-    DAILY("Once Daily"),
-    TWICE_DAILY("Twice Daily"),
-    THREE_TIMES_DAILY("3 Times Daily"),
-    AS_NEEDED("As Needed (PRN)"),
-    CUSTOM("Custom Schedule")
-}
-
-@Entity(tableName = "medications")
+@Entity(
+    tableName = "medications",
+    indices = [
+        Index(value = ["name"]),
+        Index(value = ["category"])
+    ]
+)
 data class Medication(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val name: String,
-    val brandOrGeneric: String = "",
-    val form: MedicationForm = MedicationForm.TABLET,
-    val strength: String = "",
-    val category: MedicationCategory = MedicationCategory.OTHER,
-    val stockQuantity: Int = 0,
-    val lowStockThreshold: Int = 5,
-    val unit: String = "pills",
+
+    val name: String,                    // "Парацетамол"
+
+    @ColumnInfo(name = "active_substance")
+    val activeSubstance: String = "",    // "Paracetamol"
+
+    @ColumnInfo(name = "dosage_form")
+    val dosageForm: String = "Таблетки 500 мг", // "Таблетки 500 мг", "Капсули"
+
+    val manufacturer: String = "",       // "Київмедпрепарат"
+
+    val category: String = "Аптечка",    // "Аптечка", "Вітаміни", "Знеболювальні", "Рецептурні", "Травлення"
+
+    @ColumnInfo(name = "total_quantity")
+    val totalQuantity: Int = 30,         // 30 (всього в упаковці)
+
+    @ColumnInfo(name = "remaining_quantity")
+    val remainingQuantity: Int = 30,     // 12 (залишилось)
+
+    @ColumnInfo(name = "expiry_date")
+    val expiryDate: String = "",         // "2027-06-30"
+
+    @ColumnInfo(name = "expiry_date_epoch_days")
     val expiryDateEpochDays: Long = 0L,
-    val storageLocation: String = "Medicine Cabinet",
-    val instructions: String = "",
-    val scheduleType: ScheduleType = ScheduleType.DAILY,
-    val scheduledTimes: String = "08:00", // comma-delimited strings e.g. "08:00,20:00"
+
+    @ColumnInfo(name = "schedule_type")
+    val scheduleType: String = "DAILY",  // "DAILY", "EVERY_N_HOURS", "COURSE"
+
+    @ColumnInfo(name = "interval_hours")
+    val intervalHours: Int = 8,          // для EVERY_N_HOURS
+
+    @ColumnInfo(name = "time_of_day")
+    val timeOfDay: String = "MORNING",   // "MORNING,AFTERNOON,EVENING"
+
+    @ColumnInfo(name = "course_start_date")
+    val courseStartDate: String = "",    // "2026-09-20"
+
+    @ColumnInfo(name = "course_duration_days")
+    val courseDurationDays: Int = 7,     // для COURSE
+
+    @ColumnInfo(name = "take_before_meal")
+    val takeBeforeMeal: Boolean = false, // true = до їжі, false = після їжі
+
+    val notes: String = "",              // "Запити водою", "Не розжовувати"
+
+    @ColumnInfo(name = "profile_id")
+    val profileId: String = "default",   // "default", "mom", "dad"
+
+    @ColumnInfo(name = "track_prices")
+    val trackPrices: Boolean = false,    // Чи відстежувати ціни
+
+    @ColumnInfo(name = "target_price")
+    val targetPrice: Double = 0.0,       // Бажана ціна (0 = не встановлено)
+
+    @ColumnInfo(name = "color_hex")
     val colorHex: Long = 0xFF0D9488,
-    val createdAt: Long = System.currentTimeMillis()
+
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis()
 ) {
-    fun isLowStock(): Boolean = stockQuantity <= lowStockThreshold
+    fun isLowStock(): Boolean = remainingQuantity in 1..5
 
-    fun isExpired(currentEpochDay: Long): Boolean =
-        expiryDateEpochDays > 0 && expiryDateEpochDays < currentEpochDay
+    fun isOutOfStock(): Boolean = remainingQuantity <= 0
 
-    fun isExpiringSoon(currentEpochDay: Long, thresholdDays: Long = 30): Boolean =
-        expiryDateEpochDays > 0 &&
-                expiryDateEpochDays >= currentEpochDay &&
-                expiryDateEpochDays <= (currentEpochDay + thresholdDays)
+    fun isExpired(currentEpochDay: Long = LocalDate.now().toEpochDay()): Boolean {
+        val epochDay = getEffectiveExpiryEpochDay()
+        return epochDay > 0 && epochDay < currentEpochDay
+    }
 
-    fun daysUntilExpiry(currentEpochDay: Long): Long =
-        if (expiryDateEpochDays > 0) expiryDateEpochDays - currentEpochDay else Long.MAX_VALUE
+    fun isExpiringSoon(currentEpochDay: Long = LocalDate.now().toEpochDay(), thresholdDays: Long = 30): Boolean {
+        val epochDay = getEffectiveExpiryEpochDay()
+        return epochDay > 0 && epochDay >= currentEpochDay && epochDay <= (currentEpochDay + thresholdDays)
+    }
 
-    fun getTimesList(): List<String> =
-        if (scheduledTimes.isBlank()) emptyList()
-        else scheduledTimes.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    fun daysUntilExpiry(currentEpochDay: Long = LocalDate.now().toEpochDay()): Long {
+        val epochDay = getEffectiveExpiryEpochDay()
+        return if (epochDay > 0) epochDay - currentEpochDay else Long.MAX_VALUE
+    }
+
+    fun getEffectiveExpiryEpochDay(): Long {
+        if (expiryDateEpochDays > 0) return expiryDateEpochDays
+        if (expiryDate.isNotBlank()) {
+            return try {
+                LocalDate.parse(expiryDate, DateTimeFormatter.ISO_LOCAL_DATE).toEpochDay()
+            } catch (e: Exception) {
+                0L
+            }
+        }
+        return 0L
+    }
+
+    fun getTimeOfDayList(): List<String> {
+        if (timeOfDay.isBlank()) return listOf("MORNING")
+        return timeOfDay.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    }
 }
