@@ -4,6 +4,14 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// true лише коли передані УСІ чотири env-змінні для підпису релізу.
+val hasReleaseSigning = listOf(
+    "RELEASE_STORE_FILE",
+    "RELEASE_STORE_PASSWORD",
+    "RELEASE_KEY_ALIAS",
+    "RELEASE_KEY_PASSWORD",
+).all { !System.getenv(it).isNullOrBlank() }
+
 android {
     namespace = "com.example.pillshelf"
     compileSdk = 36
@@ -26,21 +34,15 @@ android {
             keyPassword = "android"
         }
         create("releaseConfig") {
-            // Читаємо з env-змінних, які виставляє GitHub Actions.
-            // Якщо змінні відсутні — Gradle кине виключення одразу при конфігурації,
-            // не даючи зібрати реліз без правильного keystore.
-            val storeFilePath = requireNotNull(System.getenv("RELEASE_STORE_FILE")) {
-                "RELEASE_STORE_FILE env var is missing. Release builds require a keystore."
-            }
-            storeFile = file(storeFilePath)
-            storePassword = requireNotNull(System.getenv("RELEASE_STORE_PASSWORD")) {
-                "RELEASE_STORE_PASSWORD env var is missing."
-            }
-            keyAlias = requireNotNull(System.getenv("RELEASE_KEY_ALIAS")) {
-                "RELEASE_KEY_ALIAS env var is missing."
-            }
-            keyPassword = requireNotNull(System.getenv("RELEASE_KEY_PASSWORD")) {
-                "RELEASE_KEY_PASSWORD env var is missing."
+            // Значення беруться з env-змінних, які виставляє GitHub Actions.
+            // Читаємо "м'яко": requireNotNull тут виконувався б на етапі конфігурації
+            // і ламав БУДЬ-ЯКУ Gradle-команду (wrapper, assembleDebug, sync в IDE)
+            // на машині без release-секретів. Жорстка перевірка — нижче, у tasks.
+            if (hasReleaseSigning) {
+                storeFile = file(System.getenv("RELEASE_STORE_FILE")!!)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
             }
         }
     }
@@ -55,9 +57,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Release завжди підписується releaseConfig.
-            // Ніякого фоллбеку на debug — щоб не зламати оновлення на пристроях.
-            signingConfig = signingConfigs.getByName("releaseConfig")
+            // Ніякого фоллбеку на debug-ключ — щоб не зламати оновлення на пристроях.
+            // Без секретів signingConfig лишається null → APK буде UNSIGNED,
+            // і крок apksigner verify у CI зупинить реліз.
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("releaseConfig")
+            } else {
+                null
+            }
         }
     }
     compileOptions {
@@ -88,4 +95,20 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.okhttp)
     debugImplementation(libs.androidx.ui.tooling)
+}
+
+// Жорсткий запобіжник: збирати release без ключа не можна.
+// Перевірка на taskGraph.whenReady спрацьовує ДО старту виконання задач,
+// тому падає одразу, а не після 10 хвилин компіляції. І не заважає ні
+// `wrapper`, ні debug-збірці, ні синхронізації проєкту в Android Studio.
+gradle.taskGraph.whenReady {
+    val needsSigning = allTasks.any {
+        it.name == "assembleRelease" || it.name == "bundleRelease"
+    }
+    if (needsSigning) {
+        check(hasReleaseSigning) {
+            "Release build requires signing env vars: RELEASE_STORE_FILE, " +
+                "RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD."
+        }
+    }
 }

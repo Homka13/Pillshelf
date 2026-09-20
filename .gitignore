@@ -33,3 +33,9 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Release signing material — НІКОЛИ не комітити
+*.keystore.b64
+*.jks.b64
+release-signing-credentials.txt
+signing.properties
