@@ -36,6 +36,9 @@ interface IntakeHistoryDao {
     @Query("SELECT COUNT(*) FROM intake_history WHERE medication_id = :medicationId AND taken = 1 AND intake_time >= :startOfDayTime")
     suspend fun getTodayIntakeCount(medicationId: Long, startOfDayTime: Long): Int
 
+    @Query("SELECT * FROM intake_history WHERE medication_id = :medicationId AND taken = 1 ORDER BY actual_time DESC LIMIT 1")
+    suspend fun getLastTakenIntake(medicationId: Long): IntakeHistory?
+
     @Query("DELETE FROM intake_history WHERE medication_id = :medicationId")
     suspend fun deleteForMedication(medicationId: Long)
 }

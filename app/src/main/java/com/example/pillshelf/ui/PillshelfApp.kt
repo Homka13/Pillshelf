@@ -30,9 +30,11 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Medication
 import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -62,6 +64,7 @@ import com.example.pillshelf.data.model.Medication
 import com.example.pillshelf.ui.components.AddEditMedicationSheet
 import com.example.pillshelf.ui.components.MedicationDetailSheet
 import com.example.pillshelf.ui.components.RestockDialog
+import com.example.pillshelf.ui.components.SettingsSheet
 import com.example.pillshelf.ui.screens.HistoryScreen
 import com.example.pillshelf.ui.screens.PricesScreen
 import com.example.pillshelf.ui.screens.ScheduleScreen
@@ -97,6 +100,9 @@ fun PillshelfApp(
 
     var selectedMedicationDetail by remember { mutableStateOf<Medication?>(null) }
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var restockingMedication by remember { mutableStateOf<Medication?>(null) }
 
@@ -153,6 +159,18 @@ fun PillshelfApp(
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))
+                    NavigationRailItem(
+                        selected = false,
+                        onClick = { showSettingsSheet = true },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Налаштування та довідка"
+                            )
+                        },
+                        label = { Text("Довідка") },
+                        modifier = Modifier.testTag("rail_settings_button")
+                    )
                 }
 
                 Box(
@@ -205,6 +223,17 @@ fun PillshelfApp(
                                     text = "Pillshelf",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = { showSettingsSheet = true },
+                                modifier = Modifier.testTag("open_settings_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = "Налаштування та довідка"
                                 )
                             }
                         },
@@ -320,6 +349,18 @@ fun PillshelfApp(
                 onConfirmRestock = { addedAmount ->
                     viewModel.restockMedication(med, addedAmount)
                     restockingMedication = null
+                }
+            )
+        }
+
+        // Settings & Medical Disclaimer Bottom Sheet
+        if (showSettingsSheet) {
+            SettingsSheet(
+                sheetState = settingsSheetState,
+                onDismiss = {
+                    scope.launch { settingsSheetState.hide() }.invokeOnCompletion {
+                        showSettingsSheet = false
+                    }
                 }
             )
         }

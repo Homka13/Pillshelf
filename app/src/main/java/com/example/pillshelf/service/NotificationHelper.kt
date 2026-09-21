@@ -43,6 +43,78 @@ object NotificationHelper {
         }
     }
 
+    fun showMedicationReminderNotification(
+        context: Context,
+        medicationId: Long,
+        medicationName: String,
+        dosageForm: String,
+        mealNote: String
+    ) {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            medicationId.toInt(),
+            contentIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Action: Прийняв (Take)
+        val takeIntent = Intent(context, IntakeActionReceiver::class.java).apply {
+            action = IntakeActionReceiver.ACTION_TAKE_MEDICATION
+            putExtra(IntakeActionReceiver.EXTRA_MEDICATION_ID, medicationId)
+            putExtra(IntakeActionReceiver.EXTRA_NOTIFICATION_ID, medicationId.toInt())
+        }
+        val takePendingIntent = PendingIntent.getBroadcast(
+            context,
+            (medicationId * 10 + 1).toInt(),
+            takeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Action: Відкласти на 15 хв (Snooze)
+        val snoozeIntent = Intent(context, IntakeActionReceiver::class.java).apply {
+            action = IntakeActionReceiver.ACTION_SNOOZE_MEDICATION
+            putExtra(IntakeActionReceiver.EXTRA_MEDICATION_ID, medicationId)
+            putExtra(IntakeActionReceiver.EXTRA_NOTIFICATION_ID, medicationId.toInt())
+        }
+        val snoozePendingIntent = PendingIntent.getBroadcast(
+            context,
+            (medicationId * 10 + 2).toInt(),
+            snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val title = "Час прийняти ліки"
+        val message = "$medicationName ($dosageForm)$mealNote"
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setContentIntent(contentPendingIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .addAction(android.R.drawable.ic_menu_agenda, "Прийняв", takePendingIntent)
+            .addAction(android.R.drawable.ic_menu_recent_history, "Відкласти (15 хв)", snoozePendingIntent)
+            .build()
+
+        notificationManager.notify(medicationId.toInt(), notification)
+    }
+
+    fun cancelNotification(context: Context, notificationId: Int) {
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(notificationId)
+    }
+
     fun showNotification(
         context: Context,
         title: String,
