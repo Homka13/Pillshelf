@@ -62,7 +62,7 @@ class CalculateNextIntakeUseCaseTest {
     fun testDailyScheduleMorningBeforeEight() {
         val med = createMedication(scheduleType = "DAILY", timeOfDay = "MORNING")
         val fromTime = LocalDateTime.of(LocalDate.now(), LocalTime.of(7, 0))
-        val next = useCase.calculateNextIntake(med, lastIntake = null, currentTime = fromTime)
+        val next = useCase.calculateNextIntake(med, lastIntake = null, now = fromTime)
 
         assertNotNull(next)
         assertEquals(8, next!!.hour)
@@ -74,7 +74,7 @@ class CalculateNextIntakeUseCaseTest {
     fun testDailyScheduleMorningAfterEightSchedulesNextDay() {
         val med = createMedication(scheduleType = "DAILY", timeOfDay = "MORNING")
         val fromTime = LocalDateTime.of(LocalDate.now(), LocalTime.of(9, 0))
-        val next = useCase.calculateNextIntake(med, lastIntake = null, currentTime = fromTime)
+        val next = useCase.calculateNextIntake(med, lastIntake = null, now = fromTime)
 
         assertNotNull(next)
         assertEquals(8, next!!.hour)
@@ -85,7 +85,7 @@ class CalculateNextIntakeUseCaseTest {
     fun testEveryNHoursCalculation() {
         val med = createMedication(scheduleType = "EVERY_N_HOURS", intervalHours = 6)
         val fromTime = LocalDateTime.of(2026, 6, 1, 10, 0)
-        val next = useCase.calculateNextIntake(med, lastIntake = fromTime, currentTime = fromTime)
+        val next = useCase.calculateNextIntake(med, lastIntake = fromTime, now = fromTime)
 
         assertNotNull(next)
         assertEquals(LocalDateTime.of(2026, 6, 1, 16, 0), next)
@@ -99,7 +99,7 @@ class CalculateNextIntakeUseCaseTest {
             courseDurationDays = 5,
             courseStartDate = pastStartDate
         )
-        val next = useCase.calculateNextIntake(med, lastIntake = null, currentTime = LocalDateTime.now())
+        val next = useCase.calculateNextIntake(med, lastIntake = null, now = LocalDateTime.now())
         assertNull("Completed course should not schedule further intakes", next)
     }
 }

@@ -27,6 +27,10 @@ class CalculateNextIntakeUseCase {
         // AS_NEEDED (за потреби) — не планується: прийом фіксується вручну,
         // у журналі, без розкладу і без нагадувань.
         if (medication.scheduleType.equals(AS_NEEDED, ignoreCase = true)) return null
+        // Нульовий залишок — будильники не потрібні (графік скасовується;
+        // UI додатково блокує кнопку прийому). Після поповнення план
+        // відновлюється спостерігачем у MainActivity.
+        if (medication.isOutOfStock()) return null
 
         return when (medication.scheduleType) {
             "DAILY" -> calculateDailyIntake(medication, lastIntake, now)
@@ -50,6 +54,7 @@ class CalculateNextIntakeUseCase {
      */
     fun dosesPerDay(medication: Medication): Int {
         if (medication.scheduleType.equals(AS_NEEDED, ignoreCase = true)) return 0
+        if (medication.isOutOfStock()) return 0
         return when (medication.scheduleType) {
             "EVERY_N_HOURS" -> {
                 val interval = if (medication.intervalHours > 0) medication.intervalHours else 8

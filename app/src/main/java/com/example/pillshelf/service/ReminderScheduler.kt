@@ -80,6 +80,14 @@ object ReminderScheduler {
         }
     }
 
+    /** Сумісність: кнопки сповіщення (IntakeActionReceiver). Те саме, що scheduleNextFor. */
+    fun scheduleMedication(context: Context, medication: Medication, lastIntake: LocalDateTime?) =
+        scheduleNextFor(context, medication, lastIntake)
+
+    /** Сумісність: «відкласти» на N хвилин (IntakeActionReceiver). Точний будильник від зараз. */
+    fun snoozeMedication(context: Context, medicationId: Long, snoozeMinutes: Long = 15L) =
+        schedule(context, medicationId, System.currentTimeMillis() + snoozeMinutes * 60_000)
+
     /** Планує остаточну фіналізацію дози (запис «прострочено», якщо не відмічено). */
     fun scheduleFinalize(context: Context, medicationId: Long, scheduledAtMillis: Long) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

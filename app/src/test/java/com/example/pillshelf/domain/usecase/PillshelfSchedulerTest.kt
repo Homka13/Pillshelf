@@ -102,16 +102,18 @@ class PillshelfSchedulerTest {
     }
 
     @Test
-    fun `нульовий залишок - активний курс все ще планує прийом (рішення UI)`() {
-        // Рішення: блокування прийому при нулі показує UI (кнопка disabled),
-        // тож планувальник для АКТИВНОГО курсу повертає наступний слот.
+    fun `нульовий залишок - юзкейс не планує прийомів (будильники скасовуються)`() {
+        // Рішення: нульовий залишок = calculateNextIntake -> null, тож
+        // ReminderScheduler.scheduleNextFor прибирає будильники. UI додатково
+        // блокує кнопку прийому. Після поповнення план відновлюється.
         val m = med(
             scheduleType = "COURSE",
             courseStartDate = now.toLocalDate().toString(),
             courseDurationDays = 7,
             remainingQuantity = 0
         )
-        assertTrue(useCase.dosesPerDay(m) > 0)
+        assertNull(useCase.calculateNextIntake(m, now = now))
+        assertEquals(0, useCase.dosesPerDay(m))
     }
 
     @Test
