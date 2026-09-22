@@ -11,8 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.pillshelf.service.NotificationHelper
 import com.example.pillshelf.service.ReminderScheduler
@@ -21,7 +19,6 @@ import com.example.pillshelf.ui.PillshelfApp
 import com.example.pillshelf.ui.theme.PillshelfTheme
 import com.example.pillshelf.ui.viewmodel.PillshelfViewModel
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     private val viewModel: PillshelfViewModel by viewModels {
@@ -89,15 +86,9 @@ class MainActivity : ComponentActivity() {
     private fun scheduleBackgroundWorkers() {
         val workManager = WorkManager.getInstance(applicationContext)
 
-        // Reminder worker: страховочний періодичний перегляд розкладу
-        val reminderRequest = PeriodicWorkRequestBuilder<com.example.pillshelf.service.ReminderWorker>(15, TimeUnit.MINUTES)
-            .build()
-
-        workManager.enqueueUniquePeriodicWork(
-            "pillshelf_reminders",
-            ExistingPeriodicWorkPolicy.KEEP,
-            reminderRequest
-        )
+        // Сповіщення надсилаються виключно через точні будильники (ReminderScheduler).
+        // Скасовуємо раніше заплановану періодичну задачу WorkManager, яка переживає оновлення застосунку.
+        workManager.cancelUniqueWork("pillshelf_reminders")
 
         // Price check worker: ЛИШЕ якщо користувач увімкнув моніторинг
         // (за замовчуванням він вимкнений — див. SettingsRepository).

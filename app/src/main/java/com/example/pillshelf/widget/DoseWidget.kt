@@ -1,13 +1,11 @@
 package com.example.pillshelf.widget
 
-import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.widget.RemoteViews
 import com.example.pillshelf.MainActivity
 import com.example.pillshelf.R
@@ -43,9 +41,9 @@ class DoseWidget : AppWidgetProvider() {
     companion object {
         const val ACTION_TICK_UPDATE = "com.example.pillshelf.widget.TICK_UPDATE"
         private const val TAKE_BUTTON_RC = 9_100_000
-        private const val TICK_RC = 9_200_000
+        const val TICK_RC = 9_200_000
         private const val OPEN_APP_RC = 9_300_000
-        private const val TICK_MINUTES = 15L
+        const val TICK_MINUTES = 15L
 
         /** Оновлює всі екземпляри віджета. Безпечний виклик звідусіль (швидкий локальний запит). */
         fun updateAll(context: Context) {
@@ -124,22 +122,9 @@ class DoseWidget : AppWidgetProvider() {
             scheduleNextUpdate(context)
         }
 
-        /** Періодичне оновлення годинника: будильник на +15 хв, який сам себе перепланує. */
+        /** Періодичне оновлення годинника: делегується в ReminderScheduler. */
         private fun scheduleNextUpdate(context: Context) {
-            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val pi = PendingIntent.getBroadcast(
-                context,
-                TICK_RC,
-                Intent(context, DoseWidget::class.java).apply { action = ACTION_TICK_UPDATE },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            val trigger = System.currentTimeMillis() + TICK_MINUTES * 60_000
-            val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
-            if (exact) {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi)
-            } else {
-                am.set(AlarmManager.RTC_WAKEUP, trigger, pi)
-            }
+            ReminderScheduler.scheduleWidgetUpdate(context)
         }
     }
 }

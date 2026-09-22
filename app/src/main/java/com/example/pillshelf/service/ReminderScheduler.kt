@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.example.pillshelf.data.local.PillshelfDatabase
 import com.example.pillshelf.data.model.Medication
 import com.example.pillshelf.domain.usecase.CalculateNextIntakeUseCase
 import java.time.LocalDateTime
@@ -164,6 +165,40 @@ object ReminderScheduler {
 
     private fun canScheduleExact(am: AlarmManager): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+
+    /**
+     * Переплановує точні будильники для всіх препаратів із бази даних.
+     * Використовується після перезавантаження або як страховка з ReminderWorker
+     * (лише перепланування точних будильників, без прямого надсилання сповіщень).
+     */
+    suspend fun rescheduleAll(context: Context) {
+        val db = PillshelfDatabase.getInstance(context)
+        val meds = db.medicationDao().getAllMedicationsSync()
+        for (med in meds) {
+            if (med.isOutOfStock()) {
+                cancel(context, med.id)
+            } else {
+                scheduleNextFor(context, med)
+            }
+        }
+    }
+
+    /**
+     * Періодичне оновлення віджета головного екрана (кожні 15 хв).
+     */
+    fun scheduleWidgetUpdate(context: Context) {
+        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = PendingIntent.getBroadcast(
+            context,
+            com.example.pillshelf.widget.DoseWidget.TICK_RC,
+            Intent(context, com.example.pillshelf.widget.DoseWidget::class.java).apply {
+                action = com.example.pillshelf.widget.DoseWidget.ACTION_TICK_UPDATE
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val trigger = System.currentTimeMillis() + com.example.pillshelf.widget.DoseWidget.TICK_MINUTES * 60_000L
+        setAlarm(am, trigger, pi)
+    }
 
     private fun finalizeRequestCode(medicationId: Long): Int =
         1_000_000 + (medicationId and 0xFFFFF).toInt()

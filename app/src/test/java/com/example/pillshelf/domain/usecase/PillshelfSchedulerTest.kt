@@ -203,6 +203,37 @@ class PillshelfSchedulerTest {
         assertEquals(now, next)
     }
 
+    @Test
+    fun `EVERY_N_HOURS - за один інтервал надсилається рівно одне сповіщення`() {
+        val intervalHours = 6
+        val m = med(scheduleType = "EVERY_N_HOURS", intervalHours = intervalHours)
+        val lastIntake = LocalDateTime.of(2026, 9, 20, 8, 0)
+        val nextScheduled = useCase.calculateNextIntake(m, lastIntake = lastIntake, now = lastIntake)
+        assertEquals(LocalDateTime.of(2026, 9, 20, 14, 0), nextScheduled)
+
+        // Симулюємо перебіг часу протягом усього інтервалу (кроками по 15 хв).
+        // Оскільки ReminderWorker більше не надсилає сповіщень (лише точні
+        // будильники через ReminderScheduler), сповіщення виникає лише в момент
+        // настання розрахованого часу дози.
+        var notificationsSent = 0
+        var current = lastIntake
+        val endOfInterval = nextScheduled!!
+
+        while (!current.isAfter(endOfInterval)) {
+            // Точний будильник спрацьовує виключно у призначений час дози
+            if (current == nextScheduled) {
+                notificationsSent++
+            }
+            // План лишається стабільним на весь інтервал
+            val planned = useCase.calculateNextIntake(m, lastIntake = lastIntake, now = current)
+            assertEquals(nextScheduled, planned)
+
+            current = current.plusMinutes(15)
+        }
+
+        assertEquals("За один інтервал надсилається рівно одне сповіщення", 1, notificationsSent)
+    }
+
     // ── dosesPerDay ─────────────────────────────────────────────────────────
 
     @Test

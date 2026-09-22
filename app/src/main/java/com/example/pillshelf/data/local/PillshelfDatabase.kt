@@ -49,7 +49,6 @@ abstract class PillshelfDatabase : RoomDatabase() {
                             }
                         }
                     })
-                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
